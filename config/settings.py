@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # Third party apps
+    'rest_framework',
     'channels',
     'django_celery_results',
     'django_celery_beat',
@@ -49,6 +50,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.accounts.middleware.SupabaseAuthMiddleware',  # Supabase JWT authentication
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -196,6 +198,29 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 # Encryption Key (for SALON BOARD credentials)
 
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', '')
+
+
+# Django REST Framework Configuration
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],  # Use custom middleware instead
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
+    'DATE_FORMAT': '%Y-%m-%d',
+    'TIME_FORMAT': '%H:%M:%S',
+}
 
 
 # Logging Configuration
