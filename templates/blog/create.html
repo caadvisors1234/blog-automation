@@ -26,17 +26,6 @@
             <h2 class="text-title text-gray-900 mb-6">基本情報</h2>
             
             <div class="space-y-6">
-                <!-- Title -->
-                <div>
-                    <label for="title" class="block text-body font-medium text-gray-700 mb-2">
-                        タイトル
-                        <span class="text-caption text-gray-400 font-normal ml-1">(25文字以内、省略可)</span>
-                    </label>
-                    <input type="text" id="title" name="title" maxlength="25"
-                           placeholder="AIが自動生成することもできます">
-                    <p class="text-caption text-gray-400 mt-1.5">空欄の場合、AIが自動生成します</p>
-                </div>
-                
                 <!-- Keywords -->
                 <div>
                     <label for="keywords" class="block text-body font-medium text-gray-700 mb-2">
@@ -45,17 +34,7 @@
                     </label>
                     <input type="text" id="keywords" name="keywords" required
                            placeholder="例: 春のヘアスタイル, パーマ, トリートメント">
-                    <p class="text-caption text-gray-400 mt-1.5">カンマ区切りで複数指定できます</p>
-                </div>
-                
-                <!-- AI Prompt -->
-                <div>
-                    <label for="ai_prompt" class="block text-body font-medium text-gray-700 mb-2">
-                        AIへの指示
-                        <span class="text-caption text-gray-400 font-normal ml-1">(詳細な指示)</span>
-                    </label>
-                    <textarea id="ai_prompt" name="ai_prompt" rows="4"
-                              placeholder="例: 春におすすめのトレンドヘアスタイルについて、20代〜30代女性向けに明るく親しみやすい文章で紹介してください。"></textarea>
+                    <p class="text-caption text-gray-400 mt-1.5">カンマ区切りで複数指定できます。AIがこのキーワードとアップロードした画像をもとにタイトルと記事を自動生成します。</p>
                 </div>
                 
                 <!-- Tone -->
@@ -104,7 +83,7 @@
                     <select id="stylist_id" name="stylist_id">
                         <option value="">選択してください</option>
                         {% for stylist in stylists %}
-                        <option value="{{ stylist.id }}">{{ stylist.name }}</option>
+                        <option value="{{ stylist.stylist_id }}">{{ stylist.name }}</option>
                         {% endfor %}
                     </select>
                     {% else %}
@@ -123,7 +102,7 @@
                     <select id="coupon_name" name="coupon_name">
                         <option value="">選択してください</option>
                         {% for coupon in coupons %}
-                        <option value="{{ coupon.name }}">{{ coupon.name }}</option>
+                        <option value="{{ coupon }}">{{ coupon }}</option>
                         {% endfor %}
                     </select>
                     {% else %}
@@ -168,8 +147,12 @@
 
 {% block extra_js %}
 <script>
-    // Initialize image preview
-    window.imagePreview = new ImagePreview('image-input', 'image-preview-container', 4);
-    window.imagePreview.render();
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize image preview only once
+        if (!window.imagePreview) {
+            window.imagePreview = new ImagePreview('image-input', 'image-preview-container', 4);
+            window.imagePreview.render();
+        }
+    });
 </script>
 {% endblock %}

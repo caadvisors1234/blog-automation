@@ -63,34 +63,58 @@ def generate_blog_content_task(self, post_id: int):
             logger.warning(f"Post {post_id} status is {post.status}, expected 'generating'")
             # Continue anyway in case status was manually changed
 
-        # Check if prompt exists
-        prompt = post.ai_prompt or post.keywords
-        if not prompt:
-            logger.error(f"Post {post_id} has no AI prompt or keywords")
+        keywords = (post.keywords or '').strip()
+        custom_prompt = (post.ai_prompt or '').strip()
+        tone = (post.tone or '').strip()
+
+        # Check if keywords exist (required)
+        if not keywords:
+            logger.error(f"Post {post_id} has no keywords")
             post.status = 'failed'
             post.save(update_fields=['status'])
             notifier.send_failed(
-                error='No AI prompt or keywords provided',
-                message='プロンプトまたはキーワードが指定されていません'
+                error='No keywords provided',
+                message='キーワードが指定されていません'
             )
-            return {'success': False, 'error': 'No AI prompt or keywords provided'}
+            return {'success': False, 'error': 'No keywords provided'}
 
         notifier.send_progress(10, "プロンプトを準備中...")
 
         # Initialize Gemini client
         gemini_client = GeminiClient()
 
-        # Build prompt with additional context
-        full_prompt = prompt
-        if post.tone:
-            full_prompt = f"トーン: {post.tone}\n\n{full_prompt}"
-        if post.keywords and post.ai_prompt:
-            full_prompt = f"キーワード: {post.keywords}\n\n{full_prompt}"
-
-        # Get image count for placeholders
+        # Build prompt (respect user-specified prompt if any)
         image_count = post.images.count()
+
+        if custom_prompt:
+            full_prompt = custom_prompt
+            if tone:
+                full_prompt = f"トーン: {tone}\n\n{full_prompt}"
+            if keywords:
+                full_prompt = f"キーワード: {keywords}\n\n{full_prompt}"
+        else:
+            full_prompt = f"""以下のキーワードに基づいて、美容サロンのブログ記事を作成してください。
+
+【キーワード】
+{keywords}
+
+【トーン】
+{tone or 'friendly'}
+
+【要件】
+- 美容サロンのお客様向けの親しみやすい記事を作成
+- タイトルは25文字以内で魅力的に
+- 本文は600〜800文字程度
+- キーワードを自然に含める
+- 読者が行動したくなるような内容に"""
+
         if image_count > 0:
-            full_prompt += f"\n\n画像プレースホルダー: 本文中に {{{{image_1}}}} から {{{{image_{image_count}}}}} までを適切な位置に配置してください。"
+            full_prompt += f"""
+
+【画像について】
+{image_count}枚の画像がアップロードされています。
+本文中に {{{{image_1}}}} から {{{{image_{image_count}}}}} までのプレースホルダーを適切な位置に配置してください。
+画像はヘアスタイルやサロンの様子を表しています。"""
 
         notifier.send_progress(20, "Gemini AIに送信中...")
 

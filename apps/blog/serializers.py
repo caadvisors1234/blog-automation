@@ -165,6 +165,12 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f'Maximum {MAX_IMAGES_PER_POST} images allowed')
         return value
 
+    def validate_keywords(self, value):
+        """Ensure keywords are provided"""
+        if not value or not value.strip():
+            raise serializers.ValidationError('キーワードは必須です。')
+        return value.strip()
+
     def create(self, validated_data):
         """
         Create blog post with images
@@ -183,7 +189,7 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
 
         # Determine if AI-generated based on ai_prompt
         ai_generated = bool(validated_data.get('ai_prompt'))
-        
+
         # Set default status and ai_generated flag
         validated_data['ai_generated'] = ai_generated
         validated_data['status'] = 'draft'

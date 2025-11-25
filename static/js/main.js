@@ -107,6 +107,7 @@ const api = {
 
 class ImagePreview {
     constructor(inputId, previewContainerId, maxImages = 4) {
+        this.inputId = inputId;
         this.input = document.getElementById(inputId);
         this.container = document.getElementById(previewContainerId);
         this.maxImages = maxImages;
@@ -180,18 +181,20 @@ class ImagePreview {
             this.container.appendChild(div);
         });
         
-        // Add placeholder for remaining slots
+        // Add placeholder for remaining slots (labels keep file dialog reliable)
         const remaining = this.maxImages - this.images.length;
         for (let i = 0; i < remaining; i++) {
-            const div = document.createElement('div');
-            div.className = 'w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 cursor-pointer hover:border-pink-500 hover:text-pink-500 transition-colors';
-            div.innerHTML = `
+            const label = document.createElement('label');
+            label.setAttribute('for', this.inputId);
+            label.setAttribute('role', 'button');
+            label.setAttribute('aria-label', '画像を追加');
+            label.className = 'w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 cursor-pointer hover:border-pink-500 hover:text-pink-500 transition-colors';
+            label.innerHTML = `
                 <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
             `;
-            div.onclick = () => this.input?.click();
-            this.container.appendChild(div);
+            this.container.appendChild(label);
         }
     }
     
