@@ -1,0 +1,41 @@
+# Django
+Django==5.0.0
+django-environ==0.11.2
+
+# Database
+psycopg2-binary==2.9.9
+
+# Async & WebSocket
+daphne==4.0.0
+channels==4.0.0
+channels-redis==4.1.0
+
+# Celery & Redis
+celery==5.3.4
+redis==5.0.1
+django-celery-results==2.5.1
+django-celery-beat==2.6.0
+
+# Authentication
+supabase==2.24.0
+PyJWT>=2.10.1
+cryptography==41.0.7
+
+# AI & Scraping
+google-genai==0.2.2
+beautifulsoup4==4.12.2
+lxml==4.9.4
+requests==2.31.0
+
+# Browser Automation
+playwright==1.40.0
+
+# Utilities
+python-dotenv==1.0.0
+Pillow==10.1.0
+
+# Monitoring
+flower==2.0.1
+
+# ASGI Server (removed to avoid websockets conflict with google-genai)
+# uvicorn[standard]==0.25.0
