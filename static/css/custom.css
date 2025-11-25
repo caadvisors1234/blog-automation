@@ -1,0 +1,421 @@
+/**
+ * Custom CSS for HPB Blog Automation
+ * 
+ * Supplements Tailwind CSS with custom styles
+ */
+
+/* ========================================
+   Base Styles
+   ======================================== */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-feature-settings: "palt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================================
+   Focus States
+   ======================================== */
+
+*:focus {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 2px solid rgba(217, 70, 239, 0.5);
+    outline-offset: 2px;
+}
+
+/* ========================================
+   Form Elements
+   ======================================== */
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+textarea,
+select {
+    background-color: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: #f1f5f9;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+input[type="text"]:hover,
+input[type="email"]:hover,
+input[type="password"]:hover,
+input[type="number"]:hover,
+input[type="url"]:hover,
+textarea:hover,
+select:hover {
+    border-color: rgba(100, 116, 139, 0.5);
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="url"]:focus,
+textarea:focus,
+select:focus {
+    border-color: rgba(217, 70, 239, 0.5);
+    box-shadow: 0 0 0 3px rgba(217, 70, 239, 0.15);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: rgba(100, 116, 139, 0.7);
+}
+
+/* Select arrow */
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1.25rem;
+    padding-right: 2.5rem;
+}
+
+/* Checkbox & Radio */
+input[type="checkbox"],
+input[type="radio"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid rgba(100, 116, 139, 0.5);
+    background-color: transparent;
+    cursor: pointer;
+}
+
+input[type="checkbox"] {
+    border-radius: 0.375rem;
+}
+
+input[type="radio"] {
+    border-radius: 50%;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+    background-color: #d946ef;
+    border-color: #d946ef;
+}
+
+/* ========================================
+   Buttons
+   ======================================== */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e879f9 0%, #d946ef 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -10px rgba(217, 70, 239, 0.5);
+}
+
+.btn-secondary {
+    background-color: rgba(100, 116, 139, 0.2);
+    color: #cbd5e1;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: rgba(100, 116, 139, 0.3);
+    border-color: rgba(100, 116, 139, 0.5);
+}
+
+.btn-danger {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: #94a3b8;
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: rgba(100, 116, 139, 0.1);
+    color: #f1f5f9;
+}
+
+/* ========================================
+   Cards
+   ======================================== */
+
+.card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(100, 116, 139, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -15px rgba(217, 70, 239, 0.2);
+    border-color: rgba(217, 70, 239, 0.2);
+}
+
+/* ========================================
+   Status Badges
+   ======================================== */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-draft {
+    background-color: rgba(100, 116, 139, 0.2);
+    color: #94a3b8;
+}
+
+.badge-generating {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+.badge-ready {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.badge-publishing {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.badge-published {
+    background-color: rgba(217, 70, 239, 0.2);
+    color: #e879f9;
+}
+
+.badge-failed {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+/* ========================================
+   Tables
+   ======================================== */
+
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table th {
+    text-align: left;
+    padding: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    background-color: rgba(30, 41, 59, 0.3);
+    border-bottom: 1px solid rgba(100, 116, 139, 0.1);
+}
+
+.table th:first-child {
+    border-top-left-radius: 0.75rem;
+}
+
+.table th:last-child {
+    border-top-right-radius: 0.75rem;
+}
+
+.table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(100, 116, 139, 0.1);
+}
+
+.table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(100, 116, 139, 0.05);
+}
+
+/* ========================================
+   Loading States
+   ======================================== */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        rgba(100, 116, 139, 0.1) 25%,
+        rgba(100, 116, 139, 0.2) 50%,
+        rgba(100, 116, 139, 0.1) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 0.5rem;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.spinner {
+    border: 3px solid rgba(100, 116, 139, 0.2);
+    border-top-color: #d946ef;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================
+   Tooltips
+   ======================================== */
+
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-0.5rem);
+    padding: 0.5rem 0.75rem;
+    background-color: #1e293b;
+    color: #f1f5f9;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    border-radius: 0.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 50;
+}
+
+[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-0.25rem);
+}
+
+/* ========================================
+   Transitions
+   ======================================== */
+
+.transition-enter {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.transition-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.3s ease;
+}
+
+.transition-exit {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.transition-exit-active {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+}
+
+/* ========================================
+   Responsive Utilities
+   ======================================== */
+
+@media (max-width: 640px) {
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+@media (min-width: 641px) {
+    .show-mobile-only {
+        display: none !important;
+    }
+}
+
+/* ========================================
+   Print Styles
+   ======================================== */
+
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #ccc;
+        background: white;
+    }
+}
+

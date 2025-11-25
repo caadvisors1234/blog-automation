@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}記事削除 - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto px-6 lg:px-8 py-20">
+    <div class="card text-center">
+        <div class="w-14 h-14 mx-auto mb-6 rounded-full bg-red-50 flex items-center justify-center">
+            <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+        </div>
+        
+        <h2 class="text-title text-gray-900 mb-2">記事を削除しますか？</h2>
+        <p class="text-body text-gray-500 mb-8">
+            「{{ post.title|default:"（タイトル未設定）" }}」を削除します。<br>
+            この操作は取り消せません。
+        </p>
+        
+        <form method="post" class="flex flex-col sm:flex-row gap-3 justify-center">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">
+                削除する
+            </button>
+            <a href="{% url 'blog:post_detail' pk=post.pk %}" class="btn btn-secondary">
+                キャンセル
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

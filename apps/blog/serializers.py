@@ -171,22 +171,24 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
 
         Args:
             validated_data: Validated data from request
+                          (user is passed from perform_create via serializer.save(user=...))
 
         Returns:
             Created BlogPost instance
         """
         images_data = validated_data.pop('images', [])
-        user = self.context['request'].user
+        
+        # user is passed from ViewSet.perform_create()
+        # Do not set it here to avoid duplicate assignment
 
         # Determine if AI-generated based on ai_prompt
         ai_generated = bool(validated_data.get('ai_prompt'))
+        
+        # Set default status and ai_generated flag
+        validated_data['ai_generated'] = ai_generated
+        validated_data['status'] = 'draft'
 
-        blog_post = BlogPost.objects.create(
-            user=user,
-            ai_generated=ai_generated,
-            status='draft',
-            **validated_data
-        )
+        blog_post = BlogPost.objects.create(**validated_data)
 
         # Create images
         for idx, image_file in enumerate(images_data):

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ブログ記事一覧 - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-10 gap-4">
+        <div>
+            <h1 class="text-display text-gray-900 mb-2">記事一覧</h1>
+            <p class="text-body text-gray-500">作成した記事を管理できます</p>
+        </div>
+        <a href="{% url 'blog:post_create' %}" class="btn btn-primary inline-flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            新規作成
+        </a>
+    </header>
+    
+    <!-- Filters -->
+    <section class="card mb-8">
+        <form method="get" class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <input type="text" name="search" value="{{ search|default:'' }}" 
+                       placeholder="タイトル、内容、キーワードで検索...">
+            </div>
+            <div class="sm:w-48">
+                <select name="status" onchange="this.form.submit()">
+                    <option value="">すべてのステータス</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                        {% if value == 'draft' %}下書き
+                        {% elif value == 'generating' %}生成中
+                        {% elif value == 'ready' %}準備完了
+                        {% elif value == 'publishing' %}投稿中
+                        {% elif value == 'published' %}公開済み
+                        {% elif value == 'failed' %}失敗
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                検索
+            </button>
+        </form>
+    </section>
+    
+    <!-- Posts List -->
+    {% if posts %}
+    <section class="space-y-4">
+        {% for post in posts %}
+        <article class="card-interactive">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start space-x-4 min-w-0">
+                    <div class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {% if post.images.exists %}
+                        <img src="{{ post.images.first.image_url }}" alt="" class="w-12 h-12 object-cover">
+                        {% else %}
+                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <a href="{% url 'blog:post_detail' pk=post.pk %}" 
+                           class="text-body font-medium text-gray-900 hover:text-pink-500 transition-colors truncate block">
+                            {{ post.title|default:"（タイトル未設定）" }}
+                        </a>
+                        <p class="text-caption text-gray-500 mt-1 line-clamp-2">
+                            {% if post.content %}
+                            {{ post.content|truncatechars:100 }}
+                            {% elif post.ai_prompt %}
+                            プロンプト: {{ post.ai_prompt|truncatechars:80 }}
+                            {% else %}
+                            （内容未設定）
+                            {% endif %}
+                        </p>
+                        <div class="flex items-center space-x-4 mt-2 text-caption text-gray-400">
+                            <span>{{ post.created_at|date:"Y/m/d H:i" }}</span>
+                            {% if post.images.exists %}
+                            <span>画像 {{ post.images.count }}枚</span>
+                            {% endif %}
+                            {% if post.ai_generated %}
+                            <span class="text-pink-500">AI生成</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4 sm:flex-shrink-0">
+                    <span class="badge badge-{{ post.status }}">
+                        {% if post.status == 'draft' %}下書き
+                        {% elif post.status == 'generating' %}生成中
+                        {% elif post.status == 'ready' %}準備完了
+                        {% elif post.status == 'publishing' %}投稿中
+                        {% elif post.status == 'published' %}公開済み
+                        {% elif post.status == 'failed' %}失敗
+                        {% endif %}
+                    </span>
+                    
+                    <div class="flex items-center space-x-1">
+                        <a href="{% url 'blog:post_detail' pk=post.pk %}" 
+                           class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                           title="詳細">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </a>
+                        <a href="{% url 'blog:post_edit' pk=post.pk %}" 
+                           class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                           title="編集">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+    {% else %}
+    <section class="card text-center py-16">
+        <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+        </div>
+        <h2 class="text-title text-gray-900 mb-2">記事が見つかりません</h2>
+        <p class="text-body text-gray-500 mb-8">
+            {% if search or status_filter %}
+            検索条件に一致する記事がありません
+            {% else %}
+            最初の記事を作成してみましょう
+            {% endif %}
+        </p>
+        {% if search or status_filter %}
+        <a href="{% url 'blog:post_list' %}" class="btn btn-secondary">
+            フィルターをクリア
+        </a>
+        {% else %}
+        <a href="{% url 'blog:post_create' %}" class="btn btn-primary">
+            新規作成
+        </a>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

@@ -34,3 +34,13 @@ HPB（Hot Pepper Beauty）ブログ自動化システム。AIによるブログ�
 
 ## 更新履歴
 - 2025年11月: モデル更新（BlogImage, PostLog追加）、ドキュメント整合性確保
+- 2025年11月25日: WebSocket実装完了（Phase 2.5）
+  - consumers.py: BlogProgressConsumer, TaskStatusConsumer
+  - routing.py: ws/blog/progress/, ws/task/
+  - progress.py: ProgressNotifier, send_progress(), send_error()
+  - tasks.py: リアルタイム進捗通知統合
+- 2025年11月25日: フロントエンド実装完了（Phase 2.6 + Phase 3）
+  - テンプレート: base.html, dashboard.html, blog/*, accounts/*, errors/*
+  - 静的ファイル: custom.css, websocket.js, main.js
+  - ビュー: dashboard, login/logout, settings, post CRUD
+  - URLルーティング: core, accounts, blog 全て設定済み

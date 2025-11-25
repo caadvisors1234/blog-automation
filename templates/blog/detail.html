@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ post.title|default:"記事詳細" }} - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-10">
+        <a href="{% url 'blog:post_list' %}" 
+           class="inline-flex items-center text-body text-gray-500 hover:text-gray-900 transition-colors mb-6">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            記事一覧
+        </a>
+        
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+                <div class="flex items-center space-x-3 mb-3">
+                    <h1 class="text-display text-gray-900">
+                        {{ post.title|default:"（タイトル未設定）" }}
+                    </h1>
+                    <span class="badge badge-{{ post.status }}">
+                        {% if post.status == 'draft' %}下書き
+                        {% elif post.status == 'generating' %}生成中
+                        {% elif post.status == 'ready' %}準備完了
+                        {% elif post.status == 'publishing' %}投稿中
+                        {% elif post.status == 'published' %}公開済み
+                        {% elif post.status == 'failed' %}失敗
+                        {% endif %}
+                    </span>
+                </div>
+                <p class="text-caption text-gray-500">
+                    作成: {{ post.created_at|date:"Y年m月d日 H:i" }}
+                    {% if post.published_at %}
+                    ・公開: {{ post.published_at|date:"Y年m月d日 H:i" }}
+                    {% endif %}
+                </p>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <a href="{% url 'blog:post_edit' pk=post.pk %}" class="btn btn-secondary">
+                    編集
+                </a>
+                <a href="{% url 'blog:post_delete' pk=post.pk %}" class="btn btn-danger">
+                    削除
+                </a>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Actions -->
+    {% if post.status == 'draft' or post.status == 'failed' %}
+    <section class="card mb-8 border border-pink-100 bg-pink-50/50">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-body font-medium text-gray-900">AI記事生成</h3>
+                <p class="text-caption text-gray-500">キーワードからAIが記事を自動生成します</p>
+            </div>
+            <button onclick="blogActions.generate({{ post.pk }})" class="btn btn-primary">
+                AI生成を開始
+            </button>
+        </div>
+    </section>
+    {% endif %}
+    
+    {% if post.status == 'ready' %}
+    <section class="card mb-8 border border-green-100 bg-green-50/50">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-body font-medium text-gray-900">SALON BOARD投稿</h3>
+                <p class="text-caption text-gray-500">記事をSALON BOARDに投稿します</p>
+            </div>
+            <button onclick="blogActions.publish({{ post.pk }})" class="btn btn-primary">
+                投稿を開始
+            </button>
+        </div>
+    </section>
+    {% endif %}
+    
+    {% if post.status == 'published' and post.salon_board_url %}
+    <section class="card mb-8 border border-pink-100 bg-pink-50/50">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-body font-medium text-gray-900">投稿完了</h3>
+                <p class="text-caption text-gray-500">SALON BOARDで記事を確認できます</p>
+            </div>
+            <a href="{{ post.salon_board_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                SALON BOARDで確認
+            </a>
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- Images -->
+    {% if images %}
+    <section class="card mb-8">
+        <h2 class="text-title text-gray-900 mb-4">画像</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {% for image in images %}
+            <div class="relative">
+                <img src="{{ image.image_url }}" alt="画像 {{ image.order }}" 
+                     class="w-full aspect-square object-cover rounded-lg">
+                <div class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
+                    {{ image.order }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- Content -->
+    <section class="card mb-8">
+        <h2 class="text-title text-gray-900 mb-4">本文</h2>
+        {% if post.content %}
+        <div class="text-body text-gray-700 whitespace-pre-wrap leading-relaxed">{{ post.content }}</div>
+        {% else %}
+        <p class="text-body text-gray-400">（本文未生成）</p>
+        {% endif %}
+    </section>
+    
+    <!-- Meta Info -->
+    <section class="card mb-8">
+        <h2 class="text-title text-gray-900 mb-6">詳細情報</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {% if post.keywords %}
+            <div>
+                <dt class="text-caption text-gray-500 mb-1">キーワード</dt>
+                <dd class="text-body text-gray-900">{{ post.keywords }}</dd>
+            </div>
+            {% endif %}
+            
+            {% if post.ai_prompt %}
+            <div class="sm:col-span-2">
+                <dt class="text-caption text-gray-500 mb-1">AIプロンプト</dt>
+                <dd class="text-body text-gray-900 whitespace-pre-wrap">{{ post.ai_prompt }}</dd>
+            </div>
+            {% endif %}
+            
+            {% if post.tone %}
+            <div>
+                <dt class="text-caption text-gray-500 mb-1">トーン</dt>
+                <dd class="text-body text-gray-900">{{ post.tone }}</dd>
+            </div>
+            {% endif %}
+            
+            {% if post.stylist_id %}
+            <div>
+                <dt class="text-caption text-gray-500 mb-1">スタイリストID</dt>
+                <dd class="text-body text-gray-900">{{ post.stylist_id }}</dd>
+            </div>
+            {% endif %}
+            
+            {% if post.coupon_name %}
+            <div>
+                <dt class="text-caption text-gray-500 mb-1">クーポン</dt>
+                <dd class="text-body text-gray-900">{{ post.coupon_name }}</dd>
+            </div>
+            {% endif %}
+            
+            <div>
+                <dt class="text-caption text-gray-500 mb-1">AI生成</dt>
+                <dd class="text-body">
+                    {% if post.ai_generated %}
+                    <span class="text-pink-500">✓ 生成済み</span>
+                    {% else %}
+                    <span class="text-gray-400">未生成</span>
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+    </section>
+    
+    <!-- Logs -->
+    {% if logs %}
+    <section class="card">
+        <h2 class="text-title text-gray-900 mb-6">処理ログ</h2>
+        <div class="space-y-4">
+            {% for log in logs %}
+            <div class="flex items-start space-x-4 p-4 rounded-lg bg-gray-50">
+                <div class="flex-shrink-0">
+                    {% if log.status == 'success' %}
+                    <span class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </span>
+                    {% elif log.status == 'failed' %}
+                    <span class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </span>
+                    {% else %}
+                    <span class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-body font-medium text-gray-900">
+                            {% if log.status == 'success' %}処理完了
+                            {% elif log.status == 'failed' %}処理失敗
+                            {% elif log.status == 'in_progress' %}処理中
+                            {% else %}待機中
+                            {% endif %}
+                        </span>
+                        <span class="text-caption text-gray-500">
+                            {{ log.started_at|date:"Y/m/d H:i:s" }}
+                        </span>
+                    </div>
+                    {% if log.error_message %}
+                    <p class="text-caption text-red-600 mt-1">{{ log.error_message }}</p>
+                    {% endif %}
+                    {% if log.duration_seconds %}
+                    <p class="text-caption text-gray-400 mt-1">所要時間: {{ log.duration_seconds }}秒</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        window.blogWS.connect({{ post.pk }});
+        
+        window.blogWS.on('task_completed', (data) => {
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        });
+        
+        window.blogWS.on('task_failed', (data) => {
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}投稿履歴 - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-10">
+        <h1 class="text-display text-gray-900 mb-2">投稿履歴</h1>
+        <p class="text-body text-gray-500">過去の投稿処理ログを確認できます</p>
+    </header>
+    
+    <!-- Filters -->
+    <section class="card mb-8">
+        <form method="get" class="flex flex-col sm:flex-row gap-4">
+            <div class="sm:w-48">
+                <select name="status" onchange="this.form.submit()">
+                    <option value="">すべてのステータス</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待機中</option>
+                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>処理中</option>
+                    <option value="success" {% if status_filter == 'success' %}selected{% endif %}>成功</option>
+                    <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>失敗</option>
+                </select>
+            </div>
+        </form>
+    </section>
+    
+    <!-- Logs -->
+    {% if logs %}
+    <section class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-gray-100">
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">記事</th>
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">ステータス</th>
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">開始日時</th>
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">完了日時</th>
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">所要時間</th>
+                        <th class="text-left text-caption font-medium text-gray-500 px-4 py-3">エラー</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for log in logs %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-4">
+                            {% if log.blog_post %}
+                            <a href="{% url 'blog:post_detail' pk=log.blog_post.pk %}" 
+                               class="text-body text-pink-500 hover:text-pink-600 transition-colors">
+                                {{ log.blog_post.title|default:"（タイトル未設定）"|truncatechars:30 }}
+                            </a>
+                            {% else %}
+                            <span class="text-body text-gray-400">（削除済み）</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if log.status == 'success' %}
+                            <span class="badge badge-ready">成功</span>
+                            {% elif log.status == 'failed' %}
+                            <span class="badge badge-failed">失敗</span>
+                            {% elif log.status == 'in_progress' %}
+                            <span class="badge badge-generating">処理中</span>
+                            {% else %}
+                            <span class="badge badge-draft">待機中</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4 text-body text-gray-600">{{ log.started_at|date:"Y/m/d H:i:s" }}</td>
+                        <td class="px-4 py-4 text-body text-gray-600">{{ log.completed_at|date:"Y/m/d H:i:s"|default:"-" }}</td>
+                        <td class="px-4 py-4 text-body text-gray-600">
+                            {% if log.duration_seconds %}
+                            {{ log.duration_seconds }}秒
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4">
+                            {% if log.error_message %}
+                            <span class="text-caption text-red-600" title="{{ log.error_message }}">
+                                {{ log.error_message|truncatechars:50 }}
+                            </span>
+                            {% else %}
+                            <span class="text-body text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    <section class="card text-center py-16">
+        <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </div>
+        <h2 class="text-title text-gray-900 mb-2">ログがありません</h2>
+        <p class="text-body text-gray-500">
+            {% if status_filter %}
+            選択したステータスのログはありません
+            {% else %}
+            まだ投稿処理が実行されていません
+            {% endif %}
+        </p>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

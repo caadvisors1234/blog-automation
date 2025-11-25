@@ -3,6 +3,7 @@ FROM python:3.12-slim
 # システム依存パッケージのインストール
 # fonts-noto-cjk: 日本語フォント (Playwright用、必須)
 # chromium依存パッケージ: Playwright用
+# nodejs + npm: Tailwind CSS ビルド用
 RUN apt-get update && apt-get install -y \
     fonts-noto-cjk \
     libnss3 \
@@ -25,6 +26,8 @@ RUN apt-get update && apt-get install -y \
     git \
     postgresql-client \
     curl \
+    nodejs \
+    npm \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -64,6 +67,9 @@ RUN apt-get update && apt-get install -y \
 
 # アプリケーションコードをコピー
 COPY . .
+
+# npm依存関係インストール & Tailwind CSSビルド
+RUN npm install && npm run build:css
 
 # 静的ファイルディレクトリ作成
 RUN mkdir -p /app/staticfiles /app/media /app/logs

@@ -1,0 +1,151 @@
+/* Tailwind CSS directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================
+   Design System: Focus & Transparency
+   ======================================== */
+
+/* Base layer customizations */
+@layer base {
+    * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Scrollbar - subtle */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        @apply bg-gray-300 rounded;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-400;
+    }
+    
+    /* Form Elements - flat design */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="url"],
+    textarea,
+    select {
+        @apply w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-body text-gray-900;
+        @apply transition-colors duration-150;
+        @apply placeholder:text-gray-400;
+    }
+    
+    input:focus,
+    textarea:focus,
+    select:focus {
+        @apply outline-none border-pink-500 ring-2 ring-pink-500/20;
+    }
+}
+
+/* Component layer - reusable components */
+@layer components {
+    /* Buttons - flat design, no box-shadow */
+    .btn {
+        @apply inline-flex items-center justify-center px-5 py-2.5 rounded-lg font-medium text-body;
+        @apply transition-colors duration-150 cursor-pointer border-none;
+        @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    }
+    
+    .btn-primary {
+        @apply bg-pink-500 text-white;
+    }
+    .btn-primary:hover:not(:disabled) {
+        @apply bg-pink-600;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-100 text-gray-700;
+    }
+    .btn-secondary:hover:not(:disabled) {
+        @apply bg-gray-200;
+    }
+    
+    .btn-ghost {
+        @apply bg-transparent text-gray-600;
+    }
+    .btn-ghost:hover:not(:disabled) {
+        @apply bg-gray-100 text-gray-900;
+    }
+    
+    .btn-danger {
+        @apply bg-red-500 text-white;
+    }
+    .btn-danger:hover:not(:disabled) {
+        @apply bg-red-600;
+    }
+    
+    /* Cards - no border, subtle shadow */
+    .card {
+        @apply bg-white rounded-xl p-6 shadow-card;
+    }
+    
+    .card-interactive {
+        @apply bg-white rounded-xl p-6 shadow-card transition-shadow duration-150;
+    }
+    .card-interactive:hover {
+        @apply shadow-card-hover;
+    }
+    
+    /* Status Badges - minimal, text-based */
+    .badge {
+        @apply inline-flex items-center px-2.5 py-1 rounded-md text-caption font-medium;
+    }
+    
+    .badge-draft {
+        @apply bg-gray-100 text-gray-600;
+    }
+    .badge-generating {
+        @apply bg-blue-50 text-blue-700;
+    }
+    .badge-ready {
+        @apply bg-green-50 text-green-700;
+    }
+    .badge-publishing {
+        @apply bg-yellow-50 text-yellow-700;
+    }
+    .badge-published {
+        @apply bg-pink-50 text-pink-700;
+    }
+    .badge-failed {
+        @apply bg-red-50 text-red-700;
+    }
+    
+    /* Links - functional accent */
+    .link {
+        @apply text-pink-500 hover:text-pink-600 transition-colors duration-150;
+    }
+    
+    /* Focus states - accessibility */
+    .focus-ring:focus {
+        @apply outline-none ring-2 ring-pink-500 ring-offset-2;
+    }
+    
+    /* Progress bar */
+    .progress-bar {
+        @apply h-1.5 bg-pink-500 rounded-full transition-all duration-300;
+    }
+    
+    /* Status indicator */
+    .status-dot {
+        @apply w-2 h-2 rounded-full;
+    }
+    .status-dot-active {
+        @apply bg-green-500;
+    }
+    .status-dot-inactive {
+        @apply bg-gray-300;
+    }
+}
+

@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Celery tasks for blog automation
+Celery tasks for blog automation with real-time progress notifications.
+
+This module contains Celery tasks for:
+- AI blog content generation (Gemini)
+- SALON BOARD automatic publishing (Playwright)
+- Periodic cleanup tasks
+
+All tasks support WebSocket progress notifications via Django Channels.
 """
 
 import logging
@@ -9,6 +16,7 @@ from django.utils import timezone
 from .models import BlogPost, PostLog
 from .gemini_client import GeminiClient
 from .salon_board_client import SALONBoardClient
+from .progress import ProgressNotifier
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +24,9 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3)
 def generate_blog_content_task(self, post_id: int):
     """
-    Celery task to generate blog content using Gemini AI
+    Celery task to generate blog content using Gemini AI.
+    
+    Sends real-time progress updates via WebSocket.
 
     Args:
         post_id: BlogPost ID
@@ -24,15 +34,29 @@ def generate_blog_content_task(self, post_id: int):
     Returns:
         Dictionary with generation result
     """
+    notifier = None
+    
     try:
         logger.info(f"Starting AI content generation for post {post_id}")
 
         # Get blog post
         try:
-            post = BlogPost.objects.get(id=post_id)
+            post = BlogPost.objects.select_related('user').get(id=post_id)
         except BlogPost.DoesNotExist:
             logger.error(f"BlogPost {post_id} not found")
             return {'success': False, 'error': 'Blog post not found'}
+
+        # Initialize progress notifier
+        notifier = ProgressNotifier(
+            post_id=post_id,
+            user_id=post.user.id,
+            task_type=ProgressNotifier.TASK_TYPE_GENERATE,
+            task_id=self.request.id
+        )
+        
+        # Send task started notification
+        notifier.send_started("AI記事生成を開始しました")
+        notifier.send_progress(5, "準備中...")
 
         # Validate post status
         if post.status != 'generating':
@@ -45,7 +69,13 @@ def generate_blog_content_task(self, post_id: int):
             logger.error(f"Post {post_id} has no AI prompt or keywords")
             post.status = 'failed'
             post.save(update_fields=['status'])
+            notifier.send_failed(
+                error='No AI prompt or keywords provided',
+                message='プロンプトまたはキーワードが指定されていません'
+            )
             return {'success': False, 'error': 'No AI prompt or keywords provided'}
+
+        notifier.send_progress(10, "プロンプトを準備中...")
 
         # Initialize Gemini client
         gemini_client = GeminiClient()
@@ -62,14 +92,21 @@ def generate_blog_content_task(self, post_id: int):
         if image_count > 0:
             full_prompt += f"\n\n画像プレースホルダー: 本文中に {{{{image_1}}}} から {{{{image_{image_count}}}}} までを適切な位置に配置してください。"
 
+        notifier.send_progress(20, "Gemini AIに送信中...")
+
         # Generate content
         try:
+            notifier.send_progress(30, "AIが記事を生成中... (これには数秒かかります)")
+            
             result = gemini_client.generate_blog_content(
                 prompt=full_prompt,
                 title=post.title if post.title else None,
             )
 
+            notifier.send_progress(80, "生成完了。データベースを更新中...")
+
             # Update post with generated content
+            old_status = post.status
             post.title = result['title'][:25]  # Ensure title length
             post.content = result['content']
             post.generated_content = result['content']  # Backup
@@ -77,7 +114,20 @@ def generate_blog_content_task(self, post_id: int):
             post.status = 'ready'
             post.save(update_fields=['title', 'content', 'generated_content', 'ai_generated', 'status'])
 
+            notifier.send_status_update(old_status, 'ready')
+            notifier.send_progress(100, "記事生成が完了しました")
+
             logger.info(f"Successfully generated content for post {post_id}")
+
+            # Send completion notification
+            notifier.send_completed(
+                result={
+                    'post_id': post_id,
+                    'title': result['title'],
+                    'model': result.get('model', 'unknown'),
+                },
+                message=f"記事「{result['title'][:20]}...」の生成が完了しました"
+            )
 
             return {
                 'success': True,
@@ -97,19 +147,35 @@ def generate_blog_content_task(self, post_id: int):
 
             # Retry task if retries available
             if self.request.retries < self.max_retries:
+                notifier.send_progress(
+                    0,
+                    f"エラーが発生しました。リトライ中... ({self.request.retries + 1}/{self.max_retries})"
+                )
                 raise self.retry(exc=e, countdown=60 * (self.request.retries + 1))
 
+            notifier.send_failed(
+                error=str(e),
+                message='AI記事生成に失敗しました',
+                retry_count=self.request.retries
+            )
             return {'success': False, 'error': str(e), 'post_id': post_id}
 
     except Exception as e:
         logger.error(f"Unexpected error in generate_blog_content_task: {e}")
+        if notifier:
+            notifier.send_failed(
+                error=str(e),
+                message='予期せぬエラーが発生しました'
+            )
         return {'success': False, 'error': str(e)}
 
 
 @shared_task(bind=True, max_retries=3)
 def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
     """
-    Celery task to publish blog post to SALON BOARD
+    Celery task to publish blog post to SALON BOARD.
+    
+    Sends real-time progress updates via WebSocket.
 
     Args:
         post_id: BlogPost ID
@@ -119,6 +185,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         Dictionary with publication result
     """
     post_log = None
+    notifier = None
 
     try:
         logger.info(f"Starting SALON BOARD publication for post {post_id}")
@@ -129,6 +196,18 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         except BlogPost.DoesNotExist:
             logger.error(f"BlogPost {post_id} not found")
             return {'success': False, 'error': 'Blog post not found'}
+
+        # Initialize progress notifier
+        notifier = ProgressNotifier(
+            post_id=post_id,
+            user_id=post.user.id,
+            task_type=ProgressNotifier.TASK_TYPE_PUBLISH,
+            task_id=self.request.id
+        )
+        
+        # Send task started notification
+        notifier.send_started("SALON BOARDへの投稿を開始しました")
+        notifier.send_progress(5, "準備中...")
 
         # Get or create post log
         if log_id:
@@ -158,7 +237,13 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             post_log.error_message = 'Missing title or content'
             post_log.completed_at = timezone.now()
             post_log.calculate_duration()
+            notifier.send_failed(
+                error='Missing title or content',
+                message='タイトルまたは本文がありません'
+            )
             return {'success': False, 'error': 'Missing title or content'}
+
+        notifier.send_progress(10, "認証情報を確認中...")
 
         # Get SALON BOARD account
         try:
@@ -173,6 +258,10 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             post_log.error_message = str(e)
             post_log.completed_at = timezone.now()
             post_log.calculate_duration()
+            notifier.send_failed(
+                error=str(e),
+                message='SALON BOARDアカウントの認証情報を取得できませんでした'
+            )
             return {'success': False, 'error': str(e)}
 
         # Get credentials
@@ -180,10 +269,16 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
 
         # Get image paths
         image_paths = [img.file_path for img in post.images.all().order_by('order')]
+        
+        notifier.send_progress(15, f"画像{len(image_paths)}枚を準備しました")
 
         # Initialize SALON BOARD client and publish
         try:
+            notifier.send_progress(20, "ブラウザを起動中...")
+            
             with SALONBoardClient() as client:
+                notifier.send_progress(30, "SALON BOARDにログイン中...")
+                
                 # Login
                 login_success = client.login(
                     login_id=login_id,
@@ -192,6 +287,8 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
 
                 if not login_success:
                     raise Exception("Failed to login to SALON BOARD")
+
+                notifier.send_progress(50, "ログイン成功。投稿を作成中...")
 
                 # Publish post
                 result = client.publish_blog_post(
@@ -204,7 +301,10 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 )
 
                 if result['success']:
+                    notifier.send_progress(90, "投稿完了。データベースを更新中...")
+                    
                     # Update post with publication info
+                    old_status = post.status
                     post.status = 'published'
                     post.salon_board_url = result.get('url', '')
                     post.published_at = timezone.now()
@@ -216,7 +316,19 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                     post_log.completed_at = timezone.now()
                     post_log.calculate_duration()
 
+                    notifier.send_status_update(old_status, 'published')
+                    notifier.send_progress(100, "投稿が完了しました")
+
                     logger.info(f"Successfully published post {post_id} to SALON BOARD")
+
+                    # Send completion notification
+                    notifier.send_completed(
+                        result={
+                            'post_id': post_id,
+                            'url': result.get('url', ''),
+                        },
+                        message='SALON BOARDへの投稿が完了しました'
+                    )
 
                     return {
                         'success': True,
@@ -238,8 +350,17 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
 
             # Retry task if retries available
             if self.request.retries < self.max_retries:
+                notifier.send_progress(
+                    0,
+                    f"エラーが発生しました。リトライ中... ({self.request.retries + 1}/{self.max_retries})"
+                )
                 raise self.retry(exc=e, countdown=120 * (self.request.retries + 1))
 
+            notifier.send_failed(
+                error=str(e),
+                message='SALON BOARDへの投稿に失敗しました',
+                retry_count=self.request.retries
+            )
             return {'success': False, 'error': str(e), 'post_id': post_id}
 
     except Exception as e:
@@ -249,13 +370,18 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             post_log.error_message = str(e)
             post_log.completed_at = timezone.now()
             post_log.save()
+        if notifier:
+            notifier.send_failed(
+                error=str(e),
+                message='予期せぬエラーが発生しました'
+            )
         return {'success': False, 'error': str(e)}
 
 
 @shared_task
 def cleanup_old_failed_posts():
     """
-    Periodic task to clean up old failed posts
+    Periodic task to clean up old failed posts.
 
     Returns:
         Number of posts cleaned up
@@ -281,7 +407,7 @@ def cleanup_old_failed_posts():
 @shared_task
 def cleanup_old_logs():
     """
-    Periodic task to clean up old logs (6 months)
+    Periodic task to clean up old logs (6 months).
 
     Returns:
         Number of logs cleaned up

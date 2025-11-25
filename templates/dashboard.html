@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ダッシュボード - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-12">
+        <h1 class="text-display text-gray-900 mb-2">ダッシュボード</h1>
+        <p class="text-body text-gray-500">ブログ投稿の状況を確認できます</p>
+    </header>
+    
+    <!-- Stats Cards -->
+    <section id="dashboard-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <!-- Total Posts -->
+        <div class="card">
+            <p class="text-caption text-gray-500 mb-1">総投稿数</p>
+            <p id="total-posts" class="text-display text-gray-900">{{ total_posts }}</p>
+        </div>
+        
+        <!-- Monthly Posts -->
+        <div class="card">
+            <p class="text-caption text-gray-500 mb-1">今月の投稿</p>
+            <p id="monthly-posts" class="text-display text-gray-900">{{ monthly_posts }}</p>
+        </div>
+        
+        <!-- Success Rate -->
+        <div class="card">
+            <p class="text-caption text-gray-500 mb-1">成功率</p>
+            <p id="success-rate" class="text-display text-gray-900">{{ success_rate }}<span class="text-title">%</span></p>
+        </div>
+        
+        <!-- Published -->
+        <div class="card">
+            <p class="text-caption text-gray-500 mb-1">公開済み</p>
+            <p id="published-posts" class="text-display text-gray-900">{{ published_posts }}</p>
+        </div>
+    </section>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+        <!-- Status Breakdown -->
+        <section class="card">
+            <h2 class="text-title text-gray-900 mb-6">ステータス別</h2>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">下書き</span>
+                    <span class="badge badge-draft">{{ status_counts.draft }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">生成中</span>
+                    <span class="badge badge-generating">{{ status_counts.generating }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">準備完了</span>
+                    <span class="badge badge-ready">{{ status_counts.ready }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">投稿中</span>
+                    <span class="badge badge-publishing">{{ status_counts.publishing }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">公開済み</span>
+                    <span class="badge badge-published">{{ status_counts.published }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-body text-gray-600">失敗</span>
+                    <span class="badge badge-failed">{{ status_counts.failed }}</span>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Quick Actions -->
+        <section class="lg:col-span-2 card">
+            <h2 class="text-title text-gray-900 mb-6">クイックアクション</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href="{% url 'blog:post_create' %}" 
+                   class="card-interactive p-5 group">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-lg bg-pink-50 flex items-center justify-center group-hover:bg-pink-100 transition-colors">
+                            <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-body font-medium text-gray-900">新規記事作成</p>
+                            <p class="text-caption text-gray-500">AI で記事を生成</p>
+                        </div>
+                    </div>
+                </a>
+                
+                <a href="{% url 'blog:post_list' %}?status=ready" 
+                   class="card-interactive p-5 group">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center group-hover:bg-green-100 transition-colors">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-body font-medium text-gray-900">投稿待ち確認</p>
+                            <p class="text-caption text-gray-500">{{ status_counts.ready }} 件の記事</p>
+                        </div>
+                    </div>
+                </a>
+                
+                <a href="{% url 'blog:post_history' %}" 
+                   class="card-interactive p-5 group">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-body font-medium text-gray-900">投稿履歴</p>
+                            <p class="text-caption text-gray-500">過去のログを確認</p>
+                        </div>
+                    </div>
+                </a>
+                
+                <a href="{% url 'accounts:settings' %}" 
+                   class="card-interactive p-5 group">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-body font-medium text-gray-900">設定</p>
+                            <p class="text-caption text-gray-500">アカウント設定</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Recent Posts -->
+    <section class="card">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-title text-gray-900">最近の投稿</h2>
+            <a href="{% url 'blog:post_list' %}" class="text-body text-pink-500 hover:text-pink-600 transition-colors">
+                すべて見る →
+            </a>
+        </div>
+        
+        {% if recent_posts %}
+        <div class="divide-y divide-gray-100">
+            {% for post in recent_posts %}
+            <a href="{% url 'blog:post_detail' pk=post.pk %}" 
+               class="flex items-center justify-between py-4 -mx-2 px-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                <div class="flex items-center space-x-4 min-w-0">
+                    <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-body font-medium text-gray-900 truncate group-hover:text-pink-500 transition-colors">
+                            {{ post.title|default:"（タイトル未設定）" }}
+                        </p>
+                        <p class="text-caption text-gray-500">
+                            {{ post.created_at|date:"Y/m/d H:i" }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4 flex-shrink-0 ml-4">
+                    <span class="badge badge-{{ post.status }}">
+                        {% if post.status == 'draft' %}下書き
+                        {% elif post.status == 'generating' %}生成中
+                        {% elif post.status == 'ready' %}準備完了
+                        {% elif post.status == 'publishing' %}投稿中
+                        {% elif post.status == 'published' %}公開済み
+                        {% elif post.status == 'failed' %}失敗
+                        {% endif %}
+                    </span>
+                    <svg class="w-5 h-5 text-gray-300 group-hover:text-pink-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-16">
+            <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <p class="text-body text-gray-500 mb-6">まだ投稿がありません</p>
+            <a href="{% url 'blog:post_create' %}" class="btn btn-primary">
+                最初の記事を作成
+            </a>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

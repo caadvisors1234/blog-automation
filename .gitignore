@@ -83,3 +83,6 @@ yarn-error.log*
 *.key
 *.pem
 secrets/
+
+# Playwright MCP
+.playwright-mcp/

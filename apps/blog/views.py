@@ -213,6 +213,49 @@ class BlogPostViewSet(viewsets.ModelViewSet):
             'status': blog_post.status,
         }, status=status.HTTP_202_ACCEPTED)
 
+    @action(detail=False, methods=['get'], url_path='stats')
+    def stats(self, request):
+        """
+        Get statistics for user's blog posts
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            Response with statistics data
+        """
+        from django.db.models import Count
+        from django.db.models.functions import TruncMonth
+        
+        user_posts = BlogPost.objects.filter(user=request.user)
+        
+        # Total counts
+        total = user_posts.count()
+        
+        # Status counts
+        status_counts = dict(user_posts.values_list('status').annotate(count=Count('id')))
+        
+        # This month's posts
+        this_month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        this_month = user_posts.filter(created_at__gte=this_month_start).count()
+        
+        # Success rate (published / (published + failed))
+        published = status_counts.get('published', 0)
+        failed = status_counts.get('failed', 0)
+        success_rate = round((published / (published + failed) * 100)) if (published + failed) > 0 else 0
+        
+        return Response({
+            'total': total,
+            'this_month': this_month,
+            'success_rate': success_rate,
+            'draft': status_counts.get('draft', 0),
+            'generating': status_counts.get('generating', 0),
+            'ready': status_counts.get('ready', 0),
+            'publishing': status_counts.get('publishing', 0),
+            'published': published,
+            'failed': failed,
+        })
+
     @action(detail=True, methods=['get', 'post'], url_path='images')
     def images(self, request, pk=None):
         """
@@ -313,3 +356,200 @@ class PostLogViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(status=status_filter)
 
         return queryset.select_related('blog_post', 'user').order_by('-started_at')
+
+
+# ========================================
+# Template Views (Frontend)
+# ========================================
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.http import JsonResponse
+
+
+@login_required
+def post_list(request):
+    """
+    Blog post list view.
+    """
+    posts = BlogPost.objects.filter(user=request.user).order_by('-created_at')
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        posts = posts.filter(status=status_filter)
+    
+    # Search
+    search = request.GET.get('search')
+    if search:
+        posts = posts.filter(
+            Q(title__icontains=search) | 
+            Q(content__icontains=search) |
+            Q(keywords__icontains=search)
+        )
+    
+    context = {
+        'posts': posts,
+        'status_filter': status_filter,
+        'search': search,
+        'status_choices': BlogPost.STATUS_CHOICES,
+    }
+    
+    return render(request, 'blog/list.html', context)
+
+
+@login_required
+def post_create(request):
+    """
+    Blog post creation view.
+    """
+    from .hpb_scraper import scrape_stylists, scrape_coupons
+    
+    # Get user's salon info for stylists and coupons
+    stylists = []
+    coupons = []
+    
+    if request.user.hpb_salon_url:
+        try:
+            stylists = scrape_stylists(request.user.hpb_salon_url)
+        except Exception as e:
+            messages.warning(request, f'スタイリスト情報の取得に失敗しました: {str(e)}')
+        
+        try:
+            coupons = scrape_coupons(request.user.hpb_salon_url)
+        except Exception as e:
+            messages.warning(request, f'クーポン情報の取得に失敗しました: {str(e)}')
+    
+    if request.method == 'POST':
+        # Handle form submission via API or create directly
+        title = request.POST.get('title', '')
+        ai_prompt = request.POST.get('ai_prompt', '')
+        keywords = request.POST.get('keywords', '')
+        tone = request.POST.get('tone', 'friendly')
+        stylist_id = request.POST.get('stylist_id', '')
+        coupon_name = request.POST.get('coupon_name', '')
+        
+        # Create post
+        post = BlogPost.objects.create(
+            user=request.user,
+            title=title[:25] if title else '',
+            ai_prompt=ai_prompt,
+            keywords=keywords,
+            tone=tone,
+            stylist_id=stylist_id,
+            coupon_name=coupon_name,
+            status='draft',
+        )
+        
+        # Handle image uploads
+        images = request.FILES.getlist('images')
+        for i, image in enumerate(images[:MAX_IMAGES_PER_POST]):
+            BlogImage.objects.create(
+                blog_post=post,
+                image_file=image,
+                order=i + 1,
+            )
+        
+        messages.success(request, '記事を作成しました')
+        return redirect('blog:post_detail', pk=post.pk)
+    
+    context = {
+        'stylists': stylists,
+        'coupons': coupons,
+        'tone_choices': [
+            ('friendly', 'フレンドリー'),
+            ('professional', 'プロフェッショナル'),
+            ('casual', 'カジュアル'),
+            ('formal', 'フォーマル'),
+        ],
+    }
+    
+    return render(request, 'blog/create.html', context)
+
+
+@login_required
+def post_detail(request, pk):
+    """
+    Blog post detail view.
+    """
+    post = get_object_or_404(BlogPost, pk=pk, user=request.user)
+    images = post.images.all().order_by('order')
+    logs = PostLog.objects.filter(blog_post=post).order_by('-started_at')[:10]
+    
+    context = {
+        'post': post,
+        'images': images,
+        'logs': logs,
+    }
+    
+    return render(request, 'blog/detail.html', context)
+
+
+@login_required
+def post_edit(request, pk):
+    """
+    Blog post edit view.
+    """
+    post = get_object_or_404(BlogPost, pk=pk, user=request.user)
+    
+    if request.method == 'POST':
+        # Update post
+        post.title = request.POST.get('title', post.title)[:25]
+        post.content = request.POST.get('content', post.content)
+        post.ai_prompt = request.POST.get('ai_prompt', post.ai_prompt)
+        post.keywords = request.POST.get('keywords', post.keywords)
+        post.tone = request.POST.get('tone', post.tone)
+        post.stylist_id = request.POST.get('stylist_id', post.stylist_id)
+        post.coupon_name = request.POST.get('coupon_name', post.coupon_name)
+        post.save()
+        
+        messages.success(request, '記事を更新しました')
+        return redirect('blog:post_detail', pk=post.pk)
+    
+    context = {
+        'post': post,
+        'tone_choices': [
+            ('friendly', 'フレンドリー'),
+            ('professional', 'プロフェッショナル'),
+            ('casual', 'カジュアル'),
+            ('formal', 'フォーマル'),
+        ],
+    }
+    
+    return render(request, 'blog/edit.html', context)
+
+
+@login_required
+def post_delete(request, pk):
+    """
+    Blog post delete view.
+    """
+    post = get_object_or_404(BlogPost, pk=pk, user=request.user)
+    
+    if request.method == 'POST':
+        post.delete()
+        messages.success(request, '記事を削除しました')
+        return redirect('blog:post_list')
+    
+    return render(request, 'blog/delete_confirm.html', {'post': post})
+
+
+@login_required
+def post_history(request):
+    """
+    Post history/logs view.
+    """
+    logs = PostLog.objects.filter(user=request.user).order_by('-started_at')
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        logs = logs.filter(status=status_filter)
+    
+    context = {
+        'logs': logs,
+        'status_filter': status_filter,
+    }
+    
+    return render(request, 'blog/history.html', context)

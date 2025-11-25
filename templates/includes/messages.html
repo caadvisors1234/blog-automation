@@ -1,0 +1,59 @@
+<!-- Flash Messages -->
+{% if messages %}
+<div class="fixed top-20 right-6 z-50 space-y-3 max-w-sm" id="flash-messages">
+    {% for message in messages %}
+    <div class="message-item animate-slide-up bg-white rounded-xl p-4 shadow-card-hover border-l-4 
+        {% if message.tags == 'success' %}border-green-500{% elif message.tags == 'error' %}border-red-500{% elif message.tags == 'warning' %}border-yellow-500{% else %}border-pink-500{% endif %}"
+        role="alert">
+        <div class="flex items-start space-x-3">
+            <!-- Icon -->
+            <div class="flex-shrink-0 mt-0.5">
+                {% if message.tags == 'success' %}
+                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                {% elif message.tags == 'error' %}
+                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                {% elif message.tags == 'warning' %}
+                <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                {% else %}
+                <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                {% endif %}
+            </div>
+            
+            <!-- Message -->
+            <p class="flex-1 text-body text-gray-700">{{ message }}</p>
+            
+            <!-- Close Button -->
+            <button onclick="this.closest('.message-item').remove()" 
+                    class="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    // Auto-hide messages after 5 seconds
+    setTimeout(() => {
+        const messages = document.querySelectorAll('.message-item');
+        messages.forEach((msg, index) => {
+            setTimeout(() => {
+                msg.style.opacity = '0';
+                msg.style.transform = 'translateX(16px)';
+                msg.style.transition = 'all 0.2s ease';
+                setTimeout(() => msg.remove(), 200);
+            }, index * 150);
+        });
+    }, 5000);
+</script>
+{% endif %}

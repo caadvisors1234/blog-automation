@@ -114,3 +114,124 @@ class SALONBoardAccountViewSet(viewsets.ModelViewSet):
                 {'detail': 'No SALON BOARD account found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+# ========================================
+# Template Views (Frontend)
+# ========================================
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.contrib.auth import login as auth_login, logout as auth_logout
+
+
+def login_view(request):
+    """
+    Login view.
+    
+    Note: Actual authentication is handled by Supabase on the frontend.
+    This view handles the redirect after Supabase authentication.
+    """
+    if request.user.is_authenticated:
+        return redirect('core:dashboard')
+    
+    # For demo/development, allow simple login
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        
+        # Try to find user by email first
+        try:
+            user_obj = User.objects.get(email=email)
+            username = user_obj.username
+        except User.DoesNotExist:
+            username = email  # Fall back to using email as username
+        
+        # Try to authenticate
+        from django.contrib.auth import authenticate
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            auth_login(request, user)
+            messages.success(request, 'ログインしました')
+            next_url = request.GET.get('next', 'core:dashboard')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'メールアドレスまたはパスワードが正しくありません')
+    
+    return render(request, 'accounts/login.html')
+
+
+def logout_view(request):
+    """
+    Logout view.
+    """
+    auth_logout(request)
+    messages.success(request, 'ログアウトしました')
+    return redirect('accounts:login')
+
+
+@login_required
+def settings_view(request):
+    """
+    User settings view.
+    
+    Allows users to:
+    - Update HPB salon URL
+    - Manage SALON BOARD credentials
+    """
+    user = request.user
+    salon_account = None
+    
+    try:
+        salon_account = user.salon_board_account
+    except SALONBoardAccount.DoesNotExist:
+        pass
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'update_profile':
+            # Update HPB salon URL
+            hpb_salon_url = request.POST.get('hpb_salon_url', '').strip()
+            user.hpb_salon_url = hpb_salon_url
+            user.save()
+            messages.success(request, 'プロフィールを更新しました')
+        
+        elif action == 'update_salon_board':
+            # Update or create SALON BOARD account
+            login_id = request.POST.get('login_id', '').strip()
+            password = request.POST.get('password', '').strip()
+            
+            if login_id:
+                if salon_account:
+                    salon_account.login_id = login_id
+                    if password:
+                        salon_account.set_password(password)
+                    salon_account.save()
+                else:
+                    salon_account = SALONBoardAccount.objects.create(
+                        user=user,
+                        login_id=login_id,
+                    )
+                    if password:
+                        salon_account.set_password(password)
+                        salon_account.save()
+                
+                messages.success(request, 'SALON BOARDアカウントを更新しました')
+        
+        elif action == 'delete_salon_board':
+            if salon_account:
+                salon_account.delete()
+                salon_account = None
+                messages.success(request, 'SALON BOARDアカウントを削除しました')
+        
+        return redirect('accounts:settings')
+    
+    context = {
+        'user': user,
+        'salon_account': salon_account,
+    }
+    
+    return render(request, 'accounts/settings.html', context)

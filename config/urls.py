@@ -9,12 +9,17 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # API endpoints
+    
+    # API endpoints (REST)
     path('api/accounts/', include('apps.accounts.urls')),
-    path('api/blog/', include('apps.blog.urls')),
-    # Health check endpoint (will be implemented in core app)
-    # path('health/', include('apps.core.urls')),
-    # path('', include('apps.core.urls')),  # Dashboard
+    path('api/blog/', include('apps.blog.api_urls')),
+    
+    # Template views
+    path('blog/', include('apps.blog.urls')),
+    path('accounts/', include('apps.accounts.template_urls')),
+    
+    # Health check and dashboard
+    path('', include('apps.core.urls')),
 ]
 
 # Serve media files in development

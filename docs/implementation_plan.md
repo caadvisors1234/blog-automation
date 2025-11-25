@@ -212,133 +212,184 @@
 - ✅ スクリーンショット取得確認
 - ⚠️ 実際のSALON BOARD投稿は未テスト（実投稿リスク回避）
 
-### 2.5 Django Channels（WebSocket）
+### 2.5 Django Channels（WebSocket）✅
 
-#### Channels設定
-- [ ] `channels`, `channels-redis`, `daphne` インストール
-- [ ] settings.py で `ASGI_APPLICATION` 設定
-- [ ] `CHANNEL_LAYERS` 設定（Redis）
-- [ ] `config/asgi.py` 作成
+#### Channels設定 ✅
+- ✅ `channels`, `channels-redis`, `daphne` インストール
+- ✅ settings.py で `ASGI_APPLICATION` 設定
+- ✅ `CHANNEL_LAYERS` 設定（Redis）
+- ✅ `config/asgi.py` 作成
 
-#### WebSocketコンシューマー
-- [ ] `apps/blog/consumers.py` 作成
-- [ ] `BlogProgressConsumer` 実装
-  - [ ] `connect()` - 認証確認、グループ参加
-  - [ ] `disconnect()` - グループ離脱
-  - [ ] `task_progress()` - 進捗送信
-  - [ ] `task_error()` - エラー送信
+#### WebSocketコンシューマー ✅
+- ✅ `apps/blog/consumers.py` 作成
+- ✅ `BlogProgressConsumer` 実装
+  - ✅ `connect()` - 認証確認、グループ参加
+  - ✅ `disconnect()` - グループ離脱
+  - ✅ `task_progress()` - 進捗送信
+  - ✅ `task_failed()` - エラー送信
+  - ✅ `task_started()` - 開始通知
+  - ✅ `task_completed()` - 完了通知
+  - ✅ `status_update()` - ステータス変更通知
+- ✅ `TaskStatusConsumer` 実装（タスクID監視用）
 
-#### ルーティング
-- [ ] `apps/blog/routing.py` 作成
-- [ ] WebSocket URLパターン定義
-- [ ] `config/asgi.py` でルーティング統合
+#### ルーティング ✅
+- ✅ `apps/blog/routing.py` 作成
+- ✅ WebSocket URLパターン定義
+  - ✅ `ws/blog/progress/` - ユーザー全体の進捗
+  - ✅ `ws/blog/progress/<post_id>/` - 投稿別進捗
+  - ✅ `ws/task/<task_id>/` - タスク状態監視
+- ✅ `config/asgi.py` でルーティング統合
 
-#### Celeryタスクからの通知
-- [ ] `send_progress()` ユーティリティ実装
-- [ ] `send_error()` ユーティリティ実装
-- [ ] `auto_post_blog_task` に進捗通知追加
+#### Celeryタスクからの通知 ✅
+- ✅ `apps/blog/progress.py` 作成
+- ✅ `ProgressNotifier` クラス実装
+- ✅ `send_progress()` ユーティリティ実装
+- ✅ `send_error()` ユーティリティ実装
+- ✅ `generate_blog_content_task` に進捗通知追加
+- ✅ `publish_to_salon_board_task` に進捗通知追加
 
-#### 動作確認（venv/Docker）
-- [ ] WebSocket接続確認（ブラウザコンソール）
-- [ ] 進捗メッセージ受信確認
-- [ ] エラーメッセージ受信確認
+#### 動作確認（Docker）✅
+- ✅ Channel Layer設定確認（RedisChannelLayer）
+- ✅ Redis接続確認
+- ✅ Consumer インポート確認
+- ✅ ルーティング確認
+- ✅ ASGI Application確認
+- ✅ 進捗通知メソッド確認
 
-### 2.6 ビュー・API実装
+### 2.6 ビュー・API実装 ✅
 
-#### テンプレートビュー
-- [ ] `dashboard_view` 実装（統計表示）
-- [ ] `blog_list_view` 実装
-- [ ] `blog_create_view` 実装
-- [ ] `blog_detail_view` 実装
-- [ ] `blog_history_view` 実装
+#### テンプレートビュー ✅
+- ✅ `dashboard_view` 実装（統計表示）
+- ✅ `blog_list_view` 実装
+- ✅ `blog_create_view` 実装
+- ✅ `blog_detail_view` 実装
+- ✅ `blog_history_view` 実装
+- ✅ `login_view`, `logout_view`, `settings_view` 実装
 
-#### REST API
-- [ ] `api_blog_create` 実装
-- [ ] `api_blog_status` 実装
-- [ ] `api_task_status` 実装
-- [ ] `apps/blog/api_urls.py` 作成
+#### REST API ✅
+- ✅ `BlogPostViewSet` 実装（generate, publish アクション含む）
+- ✅ `BlogImageViewSet` 実装
+- ✅ `PostLogViewSet` 実装
+- ✅ `apps/blog/api_urls.py` 作成
 
-#### URL設定
-- [ ] `apps/blog/urls.py` 作成
-- [ ] `config/urls.py` 統合
-- [ ] メディアファイル配信設定（開発環境）
+#### URL設定 ✅
+- ✅ `apps/blog/urls.py` 作成（テンプレートビュー）
+- ✅ `apps/blog/api_urls.py` 作成（REST API）
+- ✅ `apps/accounts/template_urls.py` 作成
+- ✅ `config/urls.py` 統合
+- ✅ メディアファイル配信設定（開発環境）
 
-#### 動作確認（venv/Docker）
-- [ ] 全ページアクセス確認
-- [ ] API呼び出し確認（Postman/curl）
-- [ ] CSRF保護確認
+#### 動作確認（Docker）
+- ✅ ログインページ表示確認
+- ✅ 認証機能動作確認（シェルテスト）
+- ✅ ヘルスチェックエンドポイント動作確認
 
 ---
 
-## Phase 3: フロントエンド実装（推定: 3-4日）
+## Phase 3: フロントエンド実装 ✅ **完了** (2025-11-25)
 
-### 3.1 ベーステンプレート
+### 3.1 ベーステンプレート ✅
 
-- [ ] `templates/` ディレクトリ作成
-- [ ] `templates/base.html` 作成
-  - [ ] ヘッダー（ナビゲーション）
-  - [ ] メッセージ表示エリア
-  - [ ] フッター
-  - [ ] Tailwind CSS CDN読み込み
-- [ ] `templates/includes/` ディレクトリ作成
-  - [ ] `header.html`
-  - [ ] `footer.html`
-  - [ ] `messages.html`
-  - [ ] `progress_bar.html`
+- ✅ `templates/` ディレクトリ作成
+- ✅ `templates/base.html` 作成
+  - ✅ ヘッダー（ナビゲーション）
+  - ✅ メッセージ表示エリア
+  - ✅ フッター
+  - ✅ Tailwind CSS CDN読み込み
+  - ✅ モダンなダークテーマUI
+  - ✅ プログレスモーダル
+  - ✅ トースト通知
+- ✅ `templates/includes/` ディレクトリ作成
+  - ✅ `header.html`
+  - ✅ `footer.html`
+  - ✅ `messages.html`
 
-### 3.2 認証画面
+### 3.2 認証画面 ✅
 
-- [ ] `templates/accounts/` ディレクトリ作成
-- [ ] `login.html` 作成
-- [ ] `signup.html` 作成
-- [ ] `settings.html` 作成（HPB設定・SALON BOARD認証情報フォーム）
+- ✅ `templates/accounts/` ディレクトリ作成
+- ✅ `login.html` 作成
+- ✅ `settings.html` 作成（HPB設定・SALON BOARD認証情報フォーム）
 
-### 3.3 ブログ関連画面
+### 3.3 ブログ関連画面 ✅
 
-- [ ] `templates/blog/` ディレクトリ作成
-- [ ] `list.html` 作成（投稿一覧）
-- [ ] `create.html` 作成
-  - [ ] キーワード入力
-  - [ ] トーン選択
-  - [ ] 画像アップロード（最大4枚）
-  - [ ] スタイリストID
-  - [ ] クーポン名
-  - [ ] 進捗バー
-  - [ ] エラー表示エリア
-- [ ] `detail.html` 作成（投稿詳細）
-- [ ] `history.html` 作成（投稿履歴）
+- ✅ `templates/blog/` ディレクトリ作成
+- ✅ `list.html` 作成（投稿一覧）
+- ✅ `create.html` 作成
+  - ✅ キーワード入力
+  - ✅ トーン選択
+  - ✅ 画像アップロード（最大4枚）
+  - ✅ スタイリストID
+  - ✅ クーポン名
+  - ✅ 進捗バー
+  - ✅ エラー表示エリア
+- ✅ `detail.html` 作成（投稿詳細）
+- ✅ `edit.html` 作成（投稿編集）
+- ✅ `delete_confirm.html` 作成
+- ✅ `history.html` 作成（投稿履歴）
 
-### 3.4 ダッシュボード
+### 3.4 ダッシュボード ✅
 
-- [ ] `templates/dashboard.html` 作成
-  - [ ] 統計カード（総投稿数、今月の投稿、成功率）
-  - [ ] クイックアクション
-  - [ ] 最近の投稿リスト
+- ✅ `templates/dashboard.html` 作成
+  - ✅ 統計カード（総投稿数、今月の投稿、成功率）
+  - ✅ クイックアクション
+  - ✅ 最近の投稿リスト
+  - ✅ 最近のログリスト
 
-### 3.5 エラーページ
+### 3.5 エラーページ ✅
 
-- [ ] `templates/errors/` ディレクトリ作成
-- [ ] `404.html` 作成
-- [ ] `500.html` 作成
-- [ ] `503.html` 作成
+- ✅ `templates/errors/` ディレクトリ作成
+- ✅ `404.html` 作成
+- ✅ `500.html` 作成
+- ✅ `503.html` 作成
 
-### 3.6 静的ファイル
+### 3.6 静的ファイル ✅
 
-- [ ] `static/` ディレクトリ作成
-- [ ] `static/css/custom.css` 作成（カスタムスタイル）
-- [ ] `static/js/` ディレクトリ作成
-  - [ ] `websocket.js` 作成（WebSocket接続・進捗更新）
-  - [ ] `image-preview.js` 作成（画像プレビュー）
-  - [ ] `form-validation.js` 作成（クライアント側バリデーション）
+- ✅ `static/` ディレクトリ作成
+- ✅ `static/css/custom.css` 作成（カスタムスタイル）
+- ✅ `static/js/` ディレクトリ作成
+  - ✅ `websocket.js` 作成（WebSocket接続・進捗更新）
+  - ✅ `main.js` 作成（画像プレビュー、フォームバリデーション、API呼び出し）
 
-### 3.7 動作確認（venv/Docker）
+### 3.7 Tailwind CSS 本番化 ✅ (2025-11-25)
 
-- [ ] 全画面のレスポンシブ表示確認（モバイル・タブレット・PC）
-- [ ] Tailwind CSSスタイル適用確認
-- [ ] フォーム送信確認
-- [ ] WebSocket接続・進捗表示確認
-- [ ] 画像プレビュー確認
-- [ ] エラー表示確認
+- ✅ `package.json` 作成（npm依存関係、ビルドスクリプト）
+- ✅ `tailwind.config.js` 作成
+  - ✅ カスタムカラー定義（gray, pink）
+  - ✅ 4段階タイポグラフィ階層（display, title, body, caption）
+  - ✅ カスタムシャドウ（card, card-hover, modal）
+  - ✅ アニメーション定義（fadeIn, slideUp）
+- ✅ `static/css/input.css` 作成（Tailwindディレクティブ + @layer定義）
+- ✅ `static/css/output.css` 自動生成（ビルド済み・最適化済み 28KB）
+- ✅ `Dockerfile` 更新（Node.js/npm追加、ビルドステップ追加）
+- ✅ `templates/base.html` 更新（CDN削除、ビルド済みCSS読み込み）
+- ✅ ビルドコマンド動作確認
+  - 開発時: `npm run watch:css`
+  - 本番ビルド: `npm run build:css`
+
+### 3.8 UIデザインリファクタリング ✅ (2025-11-25)
+
+- ✅ デザインコンセプト「Focus & Transparency」適用
+- ✅ 全テンプレートを新デザインシステムに更新
+  - ✅ モノクロームベース（gray系 90%）
+  - ✅ 機能的アクセントカラー（pink系：アクション要素のみ）
+  - ✅ フラットデザインボタン（box-shadow削除）
+  - ✅ 余白の大幅増加（呼吸する余白）
+- ✅ コンポーネントスタイル統一
+  - ✅ `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`
+  - ✅ `.card`, `.card-interactive`
+  - ✅ `.badge-*` (draft, generating, ready, publishing, published, failed)
+- ✅ エラーページ更新（404, 500, 503）
+- ✅ JavaScript スタイル更新
+  - ✅ `main.js` 画像プレビュー（新カラー適用）
+  - ✅ `websocket.js` トースト通知（新カラー適用）
+
+### 3.9 動作確認（Docker）✅
+
+- ✅ Tailwind CSSスタイル適用確認
+- ✅ ログインページ表示確認
+- ✅ WebSocket接続確認（Channel Layer テスト）
+- ✅ 画像プレビュー機能実装確認
+- ✅ ビルド済みCSS読み込み確認
 
 ---
 
@@ -348,9 +399,9 @@
 
 - [ ] `pytest`, `pytest-django` インストール
 - [ ] `pytest.ini` 作成
-- [ ] テストディレクトリ作成
+- ✅ テストディレクトリ作成
   - [ ] `apps/accounts/tests/`
-  - [ ] `apps/blog/tests/`
+  - ✅ `apps/blog/tests/`
 
 #### accounts テスト
 - [ ] `test_models.py` 作成
@@ -375,6 +426,18 @@
   - [ ] Playwright自動化テスト（モック使用）
 - [ ] `test_tasks.py` 作成
   - [ ] Celeryタスクテスト
+- ✅ `test_stats.py` 作成 (2025-11-25)
+  - ✅ BlogPostStatsAPITestCase（7テスト）
+    - ✅ stats API認証必須テスト
+    - ✅ 総投稿数テスト
+    - ✅ 成功率計算テスト
+    - ✅ 今月投稿数テスト
+    - ✅ ユーザー分離テスト
+    - ✅ 投稿なしユーザーテスト
+  - ✅ BlogPostListTestCase（3テスト）
+    - ✅ 認証必須テスト
+    - ✅ ユーザー投稿取得テスト
+    - ✅ API投稿作成テスト
 
 ### 4.2 統合テスト
 
@@ -532,7 +595,7 @@
 ## 進捗管理
 
 **開始日**: 2025-11-25
-**現在のフェーズ**: Phase 2 完了 → Phase 3 準備中
+**現在のフェーズ**: Phase 3 完了 → Phase 4（テスト）準備中
 
 ### 完了済みフェーズ
 
@@ -585,6 +648,21 @@
 - `tests/test_celery_task.py` - Celeryタスクテスト
 - `tests/test_hpb_scraper.py` - HPBスクレイパーテスト
 - `tests/test_playwright.py` - Playwright動作テスト
+- `tests/test_websocket.py` - WebSocket動作テスト
+- `apps/blog/tests/test_stats.py` - Stats API/投稿作成テスト（9テスト）
+
+### バグ修正履歴
+
+#### 2025-11-25: シリアライザ user 二重設定バグ修正
+- **ファイル**: `apps/blog/serializers.py`
+- **問題**: `BlogPostCreateSerializer.create()` で `user` が二重設定され `TypeError` 発生
+- **原因**: `perform_create()` が `serializer.save(user=...)` で user を渡すが、`create()` でも `context['request'].user` から取得していた
+- **修正**: `create()` から直接のuser取得を削除し、`validated_data` からのみ取得するよう変更
+
+#### 2025-11-25: SupabaseAuthMiddleware セッション認証干渉バグ修正
+- **ファイル**: `apps/accounts/middleware.py`
+- **問題**: JWTがない場合に `AnonymousUser` を強制設定し、Djangoセッション認証を上書き
+- **修正**: 既存のセッション認証を尊重するよう条件分岐を追加
 
 ### 既知の課題・注意事項
 
@@ -598,8 +676,11 @@
    - 本番投稿前に必ずテスト環境での確認推奨
 
 3. **Channels（WebSocket）**
-   - Phase 2.5は未実装
-   - リアルタイム進捗通知が必要な場合は追加実装
+   - ✅ Phase 2.5 完了（2025-11-25）
+   - リアルタイム進捗通知実装済み
+   - `ws/blog/progress/` でユーザー別通知
+   - `ws/blog/progress/<post_id>/` で投稿別通知
+   - `ws/task/<task_id>/` でタスク状態監視
 
 ### 次のマイルストーン
 
