@@ -277,39 +277,52 @@ class SupabaseAuthBackend(BaseBackend):
 # apps/accounts/models.py
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+import re
 
 class User(AbstractUser):
     """
-    拡張ユーザーモデル
+    Custom user model for Supabase integration and HPB settings
     """
-    supabase_uid = models.CharField(
+    # Supabase integration
+    supabase_user_id = models.CharField(
         max_length=255,
         unique=True,
         null=True,
-        help_text="SupabaseのユーザーUID"
+        blank=True,
+        db_index=True,
+        help_text='User ID from Supabase authentication system'
     )
 
-    # HPB設定
+    # HPB settings
     hpb_salon_url = models.URLField(
+        max_length=500,
         blank=True,
-        help_text="HPBサロンTOPページURL"
+        help_text='HPB salon top page URL'
     )
     hpb_salon_id = models.CharField(
         max_length=20,
         blank=True,
-        help_text="抽出されたサロンID (例: H000123456)"
+        db_index=True,
+        help_text='Extracted salon ID (auto-generated from URL)'
     )
 
-    # SALON BOARD認証情報（暗号化）
-    salonboard_user_id = models.TextField(blank=True)
-    salonboard_password = models.TextField(blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
-        db_table = 'users'
+        db_table = 'accounts_user'
+        indexes = [
+            models.Index(fields=['supabase_user_id']),
+            models.Index(fields=['hpb_salon_id']),
+        ]
+
+    def save(self, *args, **kwargs):
+        """Auto-extract salon ID from HPB URL"""
+        if self.hpb_salon_url and not self.hpb_salon_id:
+            match = re.search(r'sln(H\d+)', self.hpb_salon_url)
+            if match:
+                self.hpb_salon_id = match.group(1)
+        super().save(*args, **kwargs)
 ```
+
+**注意**: SALON BOARD認証情報は別モデル`SALONBoardAccount`で管理します（`apps/blog/models.py`）。
 
 ### 3.6 サインアップ・ログインビュー
 
@@ -1575,5 +1588,5 @@ celery -A config flower --port=5555
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年1月
+**最終更新**: 2025年11月（Userモデル更新、SALON BOARDアカウント分離）
 **ステータス**: 初版完成

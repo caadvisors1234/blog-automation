@@ -1,849 +1,603 @@
 # 07. APIエンドポイント設計書 (API Endpoints Design)
 
 ## 1. 概要
-本ドキュメントは、HPBブログ自動化システムのAPIエンドポイントとURL設計を定義します。
-基本はDjangoテンプレートによるサーバーサイドレンダリングですが、AJAX通信用のREST APIエンドポイントも提供します。
+本ドキュメントは、HPBブログ自動化システムのAPIエンドポイント設計を定義します。
+Django REST Frameworkを使用したRESTful APIを提供します。
 
 ---
 
-## 2. URL構成方針
+## 2. アーキテクチャ
 
-### 2.1 URL設計原則
+### 2.1 API設計原則
 - **RESTful**: リソース指向のURL設計
-- **直感的**: URLから機能が推測できる
-- **階層的**: 親子関係を明確に
-- **一貫性**: 命名規則を統一
+- **ViewSet**: Django REST FrameworkのViewSetを活用
+- **Router**: DefaultRouterによる自動URL生成
+- **認証**: Session認証 + Supabase JWT
 
 ### 2.2 URL構造
 
 ```
-/                           # トップページ（ダッシュボード）
-/accounts/                  # 認証関連
-  /login/                   # ログイン
-  /signup/                  # サインアップ
-  /logout/                  # ログアウト
-  /settings/                # ユーザー設定
+/api/
+  /accounts/
+    /users/                    # ユーザー情報
+    /users/me/                 # 現在のユーザー
+    /salon-board-accounts/     # SALON BOARDアカウント
+    /salon-board-accounts/current/  # 現在のアカウント
 
-/blog/                      # ブログ投稿関連
-  /                         # 投稿一覧
-  /create/                  # 新規作成
-  /{id}/                    # 投稿詳細
-  /{id}/edit/               # 編集
-  /{id}/delete/             # 削除
-  /history/                 # 投稿履歴
-
-/api/                       # REST API（AJAX用）
   /blog/
-    /create/                # ブログ作成API
-    /{id}/status/           # ステータス取得
-  /tasks/
-    /{task_id}/status/      # タスクステータス取得
+    /posts/                    # ブログ投稿CRUD
+    /posts/{id}/generate/      # AI生成トリガー
+    /posts/{id}/publish/       # 投稿トリガー
+    /posts/{id}/images/        # 画像管理
+    /images/                   # 画像CRUD
+    /logs/                     # 投稿ログ（読み取り専用）
 
-/ws/                        # WebSocket
-  /blog/progress/           # 進捗通知
-
-/health/                    # ヘルスチェック
+/admin/                        # Django管理画面
 ```
 
 ---
 
-## 3. エンドポイント詳細
+## 3. アカウント関連API
 
-### 3.1 認証関連エンドポイント
+### 3.1 GET /api/accounts/users/me/
 
-#### POST /accounts/login/
-
-ユーザーログイン
-
-**リクエスト（Form Data）**:
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-**レスポンス（成功）**:
-```http
-HTTP/1.1 302 Found
-Location: /
-```
-
-**レスポンス（失敗）**:
-```html
-<!-- login.htmlにエラーメッセージ表示 -->
-```
-
-**実装例**:
-```python
-# apps/accounts/views.py
-from django.contrib.auth import login
-from django.shortcuts import render, redirect
-from django.contrib import messages
-
-def login_view(request):
-    if request.method == 'POST':
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-
-        # Supabase認証
-        try:
-            supabase = get_supabase_client()
-            response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-
-            if response.session:
-                # Django認証
-                from apps.accounts.backends import SupabaseAuthBackend
-                backend = SupabaseAuthBackend()
-                user = backend.authenticate(
-                    request,
-                    token=response.session.access_token
-                )
-
-                if user:
-                    login(request, user)
-                    return redirect('dashboard')
-
-        except Exception as e:
-            messages.error(request, 'ログインに失敗しました')
-
-    return render(request, 'accounts/login.html')
-```
-
----
-
-#### POST /accounts/signup/
-
-新規ユーザー登録
-
-**リクエスト（Form Data）**:
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "password_confirm": "password123"
-}
-```
-
-**レスポンス（成功）**:
-```http
-HTTP/1.1 302 Found
-Location: /accounts/login/
-```
-
----
-
-#### POST /accounts/logout/
-
-ログアウト
+現在のユーザー情報を取得
 
 **レスポンス**:
-```http
-HTTP/1.1 302 Found
-Location: /accounts/login/
+```json
+{
+  "id": 1,
+  "username": "testuser",
+  "email": "test@example.com",
+  "first_name": "",
+  "last_name": "",
+  "supabase_user_id": "uuid-string",
+  "hpb_salon_url": "https://beauty.hotpepper.jp/slnH000123456/",
+  "hpb_salon_id": "H000123456",
+  "date_joined": "2025-01-20T12:00:00Z",
+  "has_salon_board_account": true
+}
 ```
 
 ---
 
-#### GET/POST /accounts/settings/
+### 3.2 PATCH /api/accounts/users/me/
 
-ユーザー設定管理
+ユーザー情報を更新
 
-**ページ表示（GET）**:
-現在の設定を表示
-
-**設定更新（POST）**:
+**リクエスト**:
 ```json
 {
-  "hpb_salon_url": "https://beauty.hotpepper.jp/slnH000xxxxx/",
-  "salonboard_user_id": "login_id",
-  "salonboard_password": "password"
+  "username": "newusername",
+  "email": "new@example.com",
+  "hpb_salon_url": "https://beauty.hotpepper.jp/slnH000999999/"
+}
+```
+
+**レスポンス**: 更新後のユーザー情報
+
+**注意**: `hpb_salon_id`は`hpb_salon_url`から自動抽出されます
+
+---
+
+### 3.3 GET /api/accounts/salon-board-accounts/current/
+
+現在のSALON BOARDアカウントを取得
+
+**レスポンス**:
+```json
+{
+  "id": 1,
+  "login_id": "salon_login_id",
+  "is_active": true,
+  "created_at": "2025-01-20T12:00:00Z",
+  "updated_at": "2025-01-20T12:00:00Z"
+}
+```
+
+---
+
+### 3.4 POST /api/accounts/salon-board-accounts/
+
+SALON BOARDアカウントを作成
+
+**リクエスト**:
+```json
+{
+  "login_id": "salon_login_id",
+  "password": "plain_text_password",
+  "is_active": true
 }
 ```
 
 **レスポンス**:
-```http
-HTTP/1.1 302 Found
-Location: /accounts/settings/
+```json
+{
+  "id": 1,
+  "login_id": "salon_login_id",
+  "is_active": true,
+  "created_at": "2025-01-20T12:00:00Z",
+  "updated_at": "2025-01-20T12:00:00Z"
+}
 ```
 
-**実装例**:
-```python
-# apps/accounts/views.py
-from django.contrib.auth.decorators import login_required
-import re
+**注意**: パスワードは暗号化して保存されます
 
-@login_required
-def settings_view(request):
-    if request.method == 'POST':
-        user = request.user
+---
 
-        # HPBサロンURL
-        hpb_url = request.POST.get('hpb_salon_url', '').strip()
-        if hpb_url:
-            # サロンIDを抽出
-            match = re.search(r'slnH?(\d+)', hpb_url)
-            if match:
-                user.hpb_salon_id = 'H' + match.group(1)
-            user.hpb_salon_url = hpb_url
+### 3.5 PATCH /api/accounts/salon-board-accounts/{id}/
 
-        # SALON BOARD認証情報
-        sb_user_id = request.POST.get('salonboard_user_id', '').strip()
-        sb_password = request.POST.get('salonboard_password', '').strip()
+SALON BOARDアカウントを更新
 
-        if sb_user_id and sb_password:
-            user.save_credentials(sb_user_id, sb_password)
-        else:
-            user.save()
-
-        messages.success(request, '設定を更新しました')
-        return redirect('accounts:settings')
-
-    return render(request, 'accounts/settings.html')
+**リクエスト**:
+```json
+{
+  "login_id": "new_login_id",
+  "password": "new_password",
+  "is_active": true
+}
 ```
 
 ---
 
-### 3.2 ブログ投稿関連エンドポイント
+### 3.6 DELETE /api/accounts/salon-board-accounts/{id}/
 
-#### GET /blog/
+SALON BOARDアカウントを削除
 
-投稿一覧ページ
+---
 
-**レスポンス**: HTML（テンプレート: `blog/list.html`）
+## 4. ブログ投稿API
 
-**実装例**:
-```python
-# apps/blog/views.py
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from apps.blog.models import BlogPost
+### 4.1 GET /api/blog/posts/
 
-@login_required
-def blog_list_view(request):
-    posts = BlogPost.objects.filter(
-        user=request.user
-    ).select_related('user').prefetch_related('images').order_by('-created_at')
+ブログ投稿一覧を取得
 
-    context = {
-        'posts': posts
+**クエリパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| status | string | ステータスでフィルタ（draft, generating, ready, publishing, published, failed） |
+| ai_generated | boolean | AI生成フラグでフィルタ |
+| search | string | タイトル・本文で検索 |
+| page | integer | ページ番号 |
+
+**レスポンス**:
+```json
+{
+  "count": 100,
+  "next": "http://localhost:8000/api/blog/posts/?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "ブログタイトル",
+      "status": "published",
+      "ai_generated": true,
+      "author_name": "testuser",
+      "image_count": 2,
+      "stylist_id": "T000123456",
+      "coupon_name": "カット＋カラー",
+      "published_at": "2025-01-20T15:00:00Z",
+      "created_at": "2025-01-20T12:00:00Z",
+      "updated_at": "2025-01-20T15:00:00Z"
     }
-    return render(request, 'blog/list.html', context)
+  ]
+}
 ```
 
 ---
 
-#### GET /blog/create/
+### 4.2 POST /api/blog/posts/
 
-新規投稿作成ページ
-
-**レスポンス**: HTML（テンプレート: `blog/create.html`）
-
-**実装例**:
-```python
-@login_required
-def blog_create_view(request):
-    # スタイリスト・クーポン情報をフォーム用に準備
-    user = request.user
-
-    context = {
-        'tone_choices': [
-            ('friendly', '親しみやすい'),
-            ('professional', 'プロフェッショナル'),
-            ('casual', 'カジュアル'),
-        ]
-    }
-    return render(request, 'blog/create.html', context)
-```
-
----
-
-#### GET /blog/{id}/
-
-投稿詳細ページ
-
-**レスポンス**: HTML（テンプレート: `blog/detail.html`）
-
-**実装例**:
-```python
-from django.shortcuts import get_object_or_404
-
-@login_required
-def blog_detail_view(request, pk):
-    post = get_object_or_404(
-        BlogPost.objects.select_related('user', 'log').prefetch_related('images'),
-        pk=pk,
-        user=request.user
-    )
-
-    context = {
-        'post': post
-    }
-    return render(request, 'blog/detail.html', context)
-```
-
----
-
-#### GET /blog/history/
-
-投稿履歴ページ
-
-**レスポンス**: HTML（テンプレート: `blog/history.html`）
-
-**実装例**:
-```python
-@login_required
-def blog_history_view(request):
-    logs = PostLog.objects.filter(
-        user=request.user
-    ).select_related('blog_post').order_by('-started_at')
-
-    context = {
-        'logs': logs
-    }
-    return render(request, 'blog/history.html', context)
-```
-
----
-
-### 3.3 REST APIエンドポイント（AJAX用）
-
-#### POST /api/blog/create/
-
-ブログ作成API（非同期）
+ブログ投稿を作成
 
 **リクエスト（multipart/form-data）**:
 ```
-keywords: "カット カラー トリートメント"
-tone: "friendly"
-stylist_id: "T000123456"
-coupon_name: "カット＋カラー"
+title: ブログタイトル（25文字以内）
+content: 本文
+ai_prompt: AIプロンプト
+tone: friendly
+keywords: カット カラー
+stylist_id: T000123456
+coupon_name: カット＋カラー
 images[]: (File) image1.jpg
 images[]: (File) image2.jpg
 ```
 
-**レスポンス（成功）**:
+**または JSON**:
 ```json
 {
-  "status": "success",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "blog_post_id": 123,
-  "title": "生成されたタイトル",
-  "message": "ブログ作成タスクを開始しました"
+  "title": "ブログタイトル",
+  "content": "本文",
+  "ai_prompt": "AIプロンプト",
+  "tone": "friendly",
+  "keywords": "カット カラー",
+  "stylist_id": "T000123456",
+  "coupon_name": "カット＋カラー"
 }
 ```
-
-**レスポンス（エラー）**:
-```json
-{
-  "status": "error",
-  "error": "画像は最大4枚までです",
-  "code": "VALIDATION_ERROR"
-}
-```
-
-**実装例**:
-```python
-# apps/blog/views.py
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from apps.blog.models import BlogPost, BlogImage
-from apps.blog.tasks import auto_post_blog_task
-from apps.blog.ai_generator import generate_blog_content
-import json
-
-@login_required
-@csrf_exempt  # CSRFトークンはヘッダーで送信
-def api_blog_create(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
-
-    try:
-        # パラメータ取得
-        keywords = request.POST.get('keywords', '').strip()
-        tone = request.POST.get('tone', 'friendly')
-        stylist_id = request.POST.get('stylist_id', '').strip()
-        coupon_name = request.POST.get('coupon_name', '').strip()
-        images = request.FILES.getlist('images')
-
-        # バリデーション
-        if not keywords:
-            return JsonResponse({
-                'status': 'error',
-                'error': 'キーワードは必須です',
-                'code': 'VALIDATION_ERROR'
-            }, status=400)
-
-        if len(images) == 0:
-            return JsonResponse({
-                'status': 'error',
-                'error': '画像を少なくとも1枚アップロードしてください',
-                'code': 'VALIDATION_ERROR'
-            }, status=400)
-
-        if len(images) > 4:
-            return JsonResponse({
-                'status': 'error',
-                'error': '画像は最大4枚までです',
-                'code': 'VALIDATION_ERROR'
-            }, status=400)
-
-        # AI記事生成
-        content = generate_blog_content(
-            keywords=keywords,
-            tone=tone,
-            image_count=len(images)
-        )
-
-        # BlogPost作成
-        blog_post = BlogPost.objects.create(
-            user=request.user,
-            title=content['title'],
-            body=content['body'],
-            generated_body=content['body'],
-            tone=tone,
-            keywords=keywords,
-            stylist_id=stylist_id,
-            coupon_name=coupon_name,
-            status='processing'
-        )
-
-        # 画像保存
-        image_paths = []
-        for idx, image_file in enumerate(images):
-            blog_image = BlogImage.objects.create(
-                blog_post=blog_post,
-                image_file=image_file,
-                order=idx
-            )
-            image_paths.append(blog_image.file_path)
-
-        # Celeryタスク起動
-        task = auto_post_blog_task.delay(
-            user_id=request.user.id,
-            title=blog_post.title,
-            body=blog_post.body,
-            image_paths=image_paths,
-            stylist_id=stylist_id,
-            coupon_name=coupon_name
-        )
-
-        # タスクIDを保存
-        blog_post.celery_task_id = task.id
-        blog_post.save(update_fields=['celery_task_id'])
-
-        return JsonResponse({
-            'status': 'success',
-            'task_id': task.id,
-            'blog_post_id': blog_post.id,
-            'title': blog_post.title,
-            'message': 'ブログ作成タスクを開始しました'
-        })
-
-    except Exception as e:
-        logger.error(f"API error: {e}", exc_info=True)
-        return JsonResponse({
-            'status': 'error',
-            'error': str(e),
-            'code': 'INTERNAL_ERROR'
-        }, status=500)
-```
-
----
-
-#### GET /api/blog/{id}/status/
-
-ブログ投稿ステータス取得
 
 **レスポンス**:
 ```json
 {
-  "status": "completed",
-  "blog_post_id": 123,
-  "title": "タイトル",
-  "posted_at": "2025-01-20T12:34:56Z",
-  "screenshot_url": "/media/screenshots/1234567890.png"
+  "id": 1,
+  "title": "ブログタイトル",
+  "content": "本文",
+  "status": "draft",
+  "ai_generated": true,
+  "created_at": "2025-01-20T12:00:00Z"
 }
-```
-
-**実装例**:
-```python
-@login_required
-def api_blog_status(request, pk):
-    try:
-        post = BlogPost.objects.select_related('log').get(
-            pk=pk,
-            user=request.user
-        )
-
-        response_data = {
-            'status': post.status,
-            'blog_post_id': post.id,
-            'title': post.title,
-            'posted_at': post.posted_at.isoformat() if post.posted_at else None
-        }
-
-        if post.log:
-            response_data['screenshot_url'] = post.log.screenshot_path
-            response_data['error_message'] = post.log.error_message
-
-        return JsonResponse(response_data)
-
-    except BlogPost.DoesNotExist:
-        return JsonResponse({
-            'error': 'Blog post not found'
-        }, status=404)
 ```
 
 ---
 
-#### GET /api/tasks/{task_id}/status/
+### 4.3 GET /api/blog/posts/{id}/
 
-Celeryタスクステータス取得
+ブログ投稿詳細を取得
 
 **レスポンス**:
 ```json
 {
+  "id": 1,
+  "title": "ブログタイトル",
+  "content": "本文",
+  "generated_content": "AI生成元本文",
+  "status": "ready",
+  "ai_prompt": "AIプロンプト",
+  "tone": "friendly",
+  "keywords": "カット カラー",
+  "ai_generated": true,
+  "stylist_id": "T000123456",
+  "coupon_name": "カット＋カラー",
+  "celery_task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "salon_board_url": "",
+  "published_at": null,
+  "author_name": "testuser",
+  "author_email": "test@example.com",
+  "images": [
+    {
+      "id": 1,
+      "image_file": "/media/blog_images/2025/01/20/image1.jpg",
+      "image_url": "/media/blog_images/2025/01/20/image1.jpg",
+      "order": 0,
+      "uploaded_at": "2025-01-20T12:00:00Z"
+    }
+  ],
+  "log": null,
+  "created_at": "2025-01-20T12:00:00Z",
+  "updated_at": "2025-01-20T12:00:00Z"
+}
+```
+
+---
+
+### 4.4 PATCH /api/blog/posts/{id}/
+
+ブログ投稿を更新
+
+**リクエスト**:
+```json
+{
+  "title": "新しいタイトル",
+  "content": "新しい本文",
+  "status": "ready",
+  "stylist_id": "T000999999"
+}
+```
+
+**ステータス遷移ルール**:
+| 現在のステータス | 遷移可能なステータス |
+|----------------|-------------------|
+| draft | generating, ready, failed |
+| generating | ready, failed, draft |
+| ready | publishing, draft |
+| publishing | published, failed |
+| published | （変更不可） |
+| failed | draft, generating |
+
+---
+
+### 4.5 DELETE /api/blog/posts/{id}/
+
+ブログ投稿を削除
+
+**注意**: 関連する画像も削除されます
+
+---
+
+### 4.6 POST /api/blog/posts/{id}/generate/
+
+AI記事生成を開始
+
+**前提条件**:
+- ステータスが`draft`または`failed`
+- `ai_prompt`または`keywords`が設定されている
+
+**レスポンス**:
+```json
+{
+  "detail": "AI content generation started",
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "SUCCESS",
-  "result": {
-    "status": "success",
-    "screenshot_path": "/media/screenshots/1234567890.png"
+  "post_id": 1,
+  "status": "generating"
+}
+```
+
+**エラーレスポンス**:
+```json
+{
+  "detail": "Post must be in draft or failed status to generate"
+}
+```
+
+---
+
+### 4.7 POST /api/blog/posts/{id}/publish/
+
+SALON BOARDへの投稿を開始
+
+**前提条件**:
+- ステータスが`ready`または`failed`
+- タイトルと本文が設定されている
+- SALON BOARDアカウントが設定されている
+
+**レスポンス**:
+```json
+{
+  "detail": "SALON BOARD publishing started",
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "post_id": 1,
+  "log_id": 1,
+  "status": "publishing"
+}
+```
+
+---
+
+### 4.8 GET /api/blog/posts/{id}/images/
+
+投稿の画像一覧を取得
+
+**レスポンス**:
+```json
+[
+  {
+    "id": 1,
+    "image_file": "/media/blog_images/2025/01/20/image1.jpg",
+    "image_url": "/media/blog_images/2025/01/20/image1.jpg",
+    "order": 0,
+    "uploaded_at": "2025-01-20T12:00:00Z"
   }
-}
-```
-
-**実装例**:
-```python
-from celery.result import AsyncResult
-
-@login_required
-def api_task_status(request, task_id):
-    task = AsyncResult(task_id)
-
-    response_data = {
-        'task_id': task_id,
-        'status': task.status,
-        'result': None
-    }
-
-    if task.status == 'SUCCESS':
-        response_data['result'] = task.result
-    elif task.status == 'FAILURE':
-        response_data['error'] = str(task.info)
-
-    return JsonResponse(response_data)
+]
 ```
 
 ---
 
-### 3.4 WebSocketエンドポイント
+### 4.9 POST /api/blog/posts/{id}/images/
 
-#### WS /ws/blog/progress/
+画像を追加
 
-リアルタイム進捗通知
-
-**接続**:
-```javascript
-const socket = new WebSocket('ws://localhost:8000/ws/blog/progress/');
+**リクエスト（multipart/form-data）**:
 ```
-
-**受信メッセージ（進捗）**:
-```json
-{
-  "type": "task_progress",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "posting",
-  "progress": 60,
-  "message": "ログイン中...",
-  "data": {}
-}
+image: (File) image.jpg
 ```
-
-**受信メッセージ（エラー）**:
-```json
-{
-  "type": "task_error",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "error": "Login failed",
-  "message": "投稿中にエラーが発生しました"
-}
-```
-
----
-
-### 3.5 ヘルスチェックエンドポイント
-
-#### GET /health/
-
-システムヘルスチェック
 
 **レスポンス**:
 ```json
 {
-  "status": "healthy",
-  "database": "ok",
-  "redis": "ok",
-  "celery": "ok",
-  "timestamp": "2025-01-20T12:34:56Z"
+  "id": 2,
+  "image_file": "/media/blog_images/2025/01/20/image2.jpg",
+  "image_url": "/media/blog_images/2025/01/20/image2.jpg",
+  "order": 1,
+  "uploaded_at": "2025-01-20T12:00:00Z"
 }
 ```
 
-**実装例**:
-```python
-# apps/core/views.py
-from django.http import JsonResponse
-from django.db import connection
-from django.core.cache import cache
-from celery import current_app
-from datetime import datetime
-
-def health_check(request):
-    health = {
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
-    }
-
-    # Database check
-    try:
-        connection.ensure_connection()
-        health['database'] = 'ok'
-    except Exception as e:
-        health['database'] = f'error: {str(e)}'
-        health['status'] = 'unhealthy'
-
-    # Redis check
-    try:
-        cache.set('health_check', 'ok', 10)
-        if cache.get('health_check') == 'ok':
-            health['redis'] = 'ok'
-        else:
-            health['redis'] = 'error'
-            health['status'] = 'unhealthy'
-    except Exception as e:
-        health['redis'] = f'error: {str(e)}'
-        health['status'] = 'unhealthy'
-
-    # Celery check
-    try:
-        inspector = current_app.control.inspect()
-        stats = inspector.stats()
-        if stats:
-            health['celery'] = 'ok'
-        else:
-            health['celery'] = 'no workers'
-            health['status'] = 'degraded'
-    except Exception as e:
-        health['celery'] = f'error: {str(e)}'
-        health['status'] = 'unhealthy'
-
-    status_code = 200 if health['status'] == 'healthy' else 503
-    return JsonResponse(health, status=status_code)
+**エラー（4枚超過時）**:
+```json
+{
+  "detail": "Maximum 4 images allowed per post"
+}
 ```
 
 ---
 
-## 4. URL設定ファイル
+## 5. 画像API
 
-### 4.1 config/urls.py（ルート）
+### 5.1 GET /api/blog/images/{id}/
+
+画像詳細を取得
+
+### 5.2 PATCH /api/blog/images/{id}/
+
+画像を更新（順序変更など）
+
+### 5.3 DELETE /api/blog/images/{id}/
+
+画像を削除
+
+---
+
+## 6. ログAPI
+
+### 6.1 GET /api/blog/logs/
+
+投稿ログ一覧を取得
+
+**クエリパラメータ**:
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| status | string | ステータスでフィルタ（success, failed） |
+| page | integer | ページ番号 |
+
+**レスポンス**:
+```json
+{
+  "count": 50,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "blog_post": 1,
+      "blog_post_title": "ブログタイトル",
+      "user": 1,
+      "username": "testuser",
+      "status": "success",
+      "error_message": "",
+      "screenshot_path": "/tmp/screenshot_123.png",
+      "scraping_data": {},
+      "duration_seconds": 45,
+      "started_at": "2025-01-20T12:00:00Z",
+      "completed_at": "2025-01-20T12:00:45Z"
+    }
+  ]
+}
+```
+
+---
+
+### 6.2 GET /api/blog/logs/{id}/
+
+ログ詳細を取得
+
+---
+
+## 7. エラーレスポンス
+
+### 7.1 HTTPステータスコード
+
+| コード | 意味 | 使用場面 |
+|--------|------|---------|
+| 200 | OK | 成功 |
+| 201 | Created | リソース作成成功 |
+| 202 | Accepted | 非同期処理受付 |
+| 400 | Bad Request | バリデーションエラー |
+| 401 | Unauthorized | 未認証 |
+| 403 | Forbidden | 権限なし |
+| 404 | Not Found | リソース不存在 |
+| 500 | Internal Server Error | サーバーエラー |
+
+### 7.2 エラーレスポンス形式
+
+```json
+{
+  "detail": "エラーメッセージ"
+}
+```
+
+または（バリデーションエラー）:
+```json
+{
+  "title": ["This field may not be blank."],
+  "content": ["This field is required."]
+}
+```
+
+---
+
+## 8. 認証
+
+### 8.1 認証方式
+
+- **Session認証**: Django標準のセッション認証
+- **Supabase JWT**: カスタム認証バックエンドで検証
+
+### 8.2 認証ヘッダー
+
+```
+Authorization: Bearer <supabase_jwt_token>
+```
+
+### 8.3 CSRF保護
+
+```javascript
+// CSRFトークンの取得
+const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+// APIリクエスト
+fetch('/api/blog/posts/', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+    },
+    body: JSON.stringify(data)
+});
+```
+
+---
+
+## 9. URL設定
+
+### 9.1 config/urls.py
 
 ```python
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from apps.core.views import health_check, dashboard_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', dashboard_view, name='dashboard'),
-    path('accounts/', include('apps.accounts.urls')),
-    path('blog/', include('apps.blog.urls')),
-    path('api/', include('apps.blog.api_urls')),
-    path('health/', health_check, name='health'),
+    path('api/accounts/', include('apps.accounts.urls')),
+    path('api/blog/', include('apps.blog.urls')),
 ]
 
-# メディアファイル配信（開発環境のみ）
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 ```
 
-### 4.2 apps/accounts/urls.py
+### 9.2 apps/accounts/urls.py
 
 ```python
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet, SALONBoardAccountViewSet
 
 app_name = 'accounts'
 
+router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'salon-board-accounts', SALONBoardAccountViewSet, basename='salon-board-account')
+
 urlpatterns = [
-    path('login/', views.login_view, name='login'),
-    path('signup/', views.signup_view, name='signup'),
-    path('logout/', views.logout_view, name='logout'),
-    path('settings/', views.settings_view, name='settings'),
+    path('', include(router.urls)),
 ]
 ```
 
-### 4.3 apps/blog/urls.py
+### 9.3 apps/blog/urls.py
 
 ```python
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import BlogPostViewSet, BlogImageViewSet, PostLogViewSet
 
 app_name = 'blog'
 
-urlpatterns = [
-    path('', views.blog_list_view, name='list'),
-    path('create/', views.blog_create_view, name='create'),
-    path('<int:pk>/', views.blog_detail_view, name='detail'),
-    path('<int:pk>/edit/', views.blog_edit_view, name='edit'),
-    path('<int:pk>/delete/', views.blog_delete_view, name='delete'),
-    path('history/', views.blog_history_view, name='history'),
-]
-```
-
-### 4.4 apps/blog/api_urls.py
-
-```python
-from django.urls import path
-from . import views
-
-app_name = 'blog_api'
+router = DefaultRouter()
+router.register(r'posts', BlogPostViewSet, basename='post')
+router.register(r'images', BlogImageViewSet, basename='image')
+router.register(r'logs', PostLogViewSet, basename='log')
 
 urlpatterns = [
-    path('blog/create/', views.api_blog_create, name='create'),
-    path('blog/<int:pk>/status/', views.api_blog_status, name='status'),
-    path('tasks/<str:task_id>/status/', views.api_task_status, name='task_status'),
+    path('', include(router.urls)),
 ]
 ```
 
 ---
 
-## 5. エラーレスポンス
-
-### 5.1 HTTPステータスコード
-
-| コード | 意味 | 使用場面 |
-|--------|------|---------|
-| 200 | OK | 成功 |
-| 201 | Created | リソース作成成功 |
-| 302 | Found | リダイレクト |
-| 400 | Bad Request | バリデーションエラー |
-| 401 | Unauthorized | 未認証 |
-| 403 | Forbidden | 権限なし |
-| 404 | Not Found | リソース不存在 |
-| 500 | Internal Server Error | サーバーエラー |
-| 503 | Service Unavailable | サービス停止中 |
-
-### 5.2 エラーレスポンス形式
-
-```json
-{
-  "status": "error",
-  "error": "エラーメッセージ",
-  "code": "ERROR_CODE",
-  "details": {
-    "field": "field_name",
-    "message": "詳細メッセージ"
-  }
-}
-```
-
-**エラーコード一覧**:
-- `VALIDATION_ERROR`: バリデーションエラー
-- `AUTHENTICATION_ERROR`: 認証エラー
-- `PERMISSION_ERROR`: 権限エラー
-- `NOT_FOUND`: リソース不存在
-- `INTERNAL_ERROR`: サーバー内部エラー
-
----
-
-## 6. 認証・認可
-
-### 6.1 認証方式
-
-#### テンプレートページ
-- **セッション認証**: Django標準のセッション
-- **デコレータ**: `@login_required`
-
-#### REST API
-- **セッション認証**: CSRF保護付き
-- **ヘッダー**: `X-CSRFToken: <token>`
-
-#### WebSocket
-- **セッション認証**: Cookie経由
-- **認証チェック**: コンシューマーの`connect()`
-
-### 6.2 CSRF保護
-
-```python
-# settings.py
-CSRF_COOKIE_HTTPONLY = False  # JavaScriptからアクセス可能
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_TRUSTED_ORIGINS = ['https://your-domain.com']
-```
-
-```javascript
-// フロントエンド
-const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
-fetch('/api/blog/create/', {
-    method: 'POST',
-    headers: {
-        'X-CSRFToken': csrfToken
-    },
-    body: formData
-});
-```
-
----
-
-## 7. レート制限
-
-### 7.1 django-ratelimitの使用
-
-```bash
-pip install django-ratelimit
-```
-
-```python
-from django_ratelimit.decorators import ratelimit
-
-@ratelimit(key='user', rate='10/m', method='POST')
-@login_required
-def api_blog_create(request):
-    # ...
-    pass
-```
-
-### 7.2 制限値
-
-| エンドポイント | レート | 備考 |
-|--------------|--------|------|
-| POST /api/blog/create/ | 10回/分 | ユーザー単位 |
-| GET /api/tasks/{id}/status/ | 30回/分 | ユーザー単位 |
-| POST /accounts/login/ | 5回/分 | IP単位 |
-
----
-
-## 8. まとめ
+## 10. まとめ
 
 このAPI設計により：
-- **明確なURL構造**: RESTful原則に従った直感的なURL
-- **セキュリティ**: CSRF保護、認証・認可、レート制限
-- **リアルタイム性**: WebSocketによる進捗通知
-- **監視性**: ヘルスチェックエンドポイント
-- **拡張性**: APIとテンプレートの共存
-
-次のステップでは、フロントエンド画面設計を行います。
+- **RESTful設計**: リソース指向の直感的なURL
+- **ViewSet活用**: コードの再利用性と一貫性
+- **自動ルーティング**: DRF Routerによる効率的なURL管理
+- **セキュリティ**: 認証・認可、CSRF保護
+- **非同期処理**: Celeryタスクによる重い処理の分離
 
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年1月
-**ステータス**: 初版完成
+**最終更新**: 2025年11月
+**ステータス**: 実装完了・ドキュメント更新

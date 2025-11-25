@@ -20,6 +20,7 @@ class UserAdmin(BaseUserAdmin):
         'email',
         'first_name',
         'last_name',
+        'hpb_salon_id',
         'is_staff',
         'is_active',
         'date_joined',
@@ -36,11 +37,15 @@ class UserAdmin(BaseUserAdmin):
         'first_name',
         'last_name',
         'supabase_user_id',
+        'hpb_salon_id',
     ]
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Supabase Integration', {
             'fields': ('supabase_user_id',)
         }),
+        ('HPB Settings', {
+            'fields': ('hpb_salon_url', 'hpb_salon_id')
+        }),
     )
-    readonly_fields = ['date_joined', 'last_login']
+    readonly_fields = ['date_joined', 'last_login', 'hpb_salon_id']
     ordering = ['-date_joined']

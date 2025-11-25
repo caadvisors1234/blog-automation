@@ -4,11 +4,10 @@ SALON BOARD automation client using Playwright
 """
 
 import logging
-from typing import Optional, Dict, Any
-from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
-from cryptography.fernet import Fernet
-from django.conf import settings
 import time
+from typing import Optional, Dict, Any, List
+from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -73,29 +72,25 @@ class SALONBoardClient:
         except Exception as e:
             logger.error(f"Error closing browser: {e}")
 
-    def login(self, email: str, encrypted_password: str) -> bool:
+    def login(self, login_id: str, password: str) -> bool:
         """
         Login to SALON BOARD
 
         Args:
-            email: SALON BOARD email
-            encrypted_password: Encrypted password
+            login_id: SALON BOARD login ID
+            password: Password (plain text)
 
         Returns:
             True if login successful, False otherwise
         """
         try:
-            # Decrypt password
-            fernet = Fernet(settings.ENCRYPTION_KEY.encode())
-            password = fernet.decrypt(encrypted_password.encode()).decode()
-
-            logger.info(f"Attempting to login to SALON BOARD as {email}")
+            logger.info(f"Attempting to login to SALON BOARD as {login_id}")
 
             # Navigate to login page
             self.page.goto(self.LOGIN_URL, wait_until='networkidle', timeout=30000)
 
             # Fill login form
-            self.page.fill('input[name="login_id"], input[type="text"]', email)
+            self.page.fill('input[name="login_id"], input[type="text"]', login_id)
             self.page.fill('input[name="password"], input[type="password"]', password)
 
             # Click login button
@@ -126,18 +121,123 @@ class SALONBoardClient:
             logger.error(f"Login error: {e}")
             return False
 
+    def select_salon(self, salon_id: str) -> bool:
+        """
+        Select salon if multiple salons are available
+
+        Args:
+            salon_id: Salon ID (e.g., H000123456)
+
+        Returns:
+            True if salon selected or not needed, False on failure
+        """
+        try:
+            # Check if salon selection is needed
+            salon_selector = f'[data-salon-id="{salon_id}"], a[href*="{salon_id}"]'
+            if self.page.locator(salon_selector).count() > 0:
+                self.page.click(salon_selector)
+                self.page.wait_for_load_state('networkidle', timeout=10000)
+                logger.info(f"Selected salon: {salon_id}")
+                return True
+
+            # No selection needed
+            return True
+
+        except Exception as e:
+            logger.error(f"Salon selection error: {e}")
+            return False
+
+    def select_stylist(self, stylist_id: str) -> bool:
+        """
+        Select stylist from dropdown
+
+        Args:
+            stylist_id: Stylist ID (T number)
+
+        Returns:
+            True if stylist selected, False otherwise
+        """
+        try:
+            if not stylist_id:
+                return True
+
+            # Try to find and select stylist
+            stylist_selectors = [
+                f'select[name="stylist_id"] option[value="{stylist_id}"]',
+                f'select#stylist_id option[value="{stylist_id}"]',
+            ]
+
+            for selector in stylist_selectors:
+                if self.page.locator(selector).count() > 0:
+                    self.page.select_option(selector.replace(f' option[value="{stylist_id}"]', ''), stylist_id)
+                    logger.info(f"Selected stylist: {stylist_id}")
+                    return True
+
+            logger.warning(f"Stylist {stylist_id} not found")
+            return True  # Continue without stylist
+
+        except Exception as e:
+            logger.error(f"Stylist selection error: {e}")
+            return True
+
+    def select_coupon(self, coupon_name: str) -> bool:
+        """
+        Select coupon by name (partial match)
+
+        Args:
+            coupon_name: Coupon name for search
+
+        Returns:
+            True if coupon selected, False otherwise
+        """
+        try:
+            if not coupon_name:
+                return True
+
+            # Try to find coupon input/search
+            coupon_input_selectors = [
+                'input[name="coupon_search"]',
+                'input#coupon_search',
+                'input[placeholder*="クーポン"]',
+            ]
+
+            for selector in coupon_input_selectors:
+                if self.page.locator(selector).count() > 0:
+                    self.page.fill(selector, coupon_name)
+                    self.page.wait_for_timeout(1000)
+
+                    # Click first result
+                    result_selector = '.coupon-result:first-child, .search-result:first-child'
+                    if self.page.locator(result_selector).count() > 0:
+                        self.page.click(result_selector)
+                        logger.info(f"Selected coupon: {coupon_name}")
+                        return True
+
+            logger.warning(f"Coupon {coupon_name} not found")
+            return True
+
+        except Exception as e:
+            logger.error(f"Coupon selection error: {e}")
+            return True
+
     def publish_blog_post(
         self,
         title: str,
         content: str,
+        image_paths: Optional[List[str]] = None,
+        stylist_id: Optional[str] = None,
+        coupon_name: Optional[str] = None,
         salon_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish blog post to SALON BOARD
 
         Args:
-            title: Blog post title
+            title: Blog post title (max 25 chars)
             content: Blog post content
+            image_paths: List of image file paths
+            stylist_id: Optional stylist ID
+            coupon_name: Optional coupon name
             salon_id: Optional salon ID
 
         Returns:
@@ -147,7 +247,11 @@ class SALONBoardClient:
             Exception: If publication fails
         """
         try:
-            logger.info(f"Publishing blog post: {title[:50]}...")
+            logger.info(f"Publishing blog post: {title[:25]}...")
+
+            # Select salon if needed
+            if salon_id:
+                self.select_salon(salon_id)
 
             # Navigate to blog creation page
             blog_create_url = f"{self.BLOG_URL}create/"
@@ -158,10 +262,20 @@ class SALONBoardClient:
 
             # Fill title
             title_selector = 'input[name="title"], #title'
-            self.page.fill(title_selector, title)
+            self.page.fill(title_selector, title[:25])
 
-            # Fill content
-            # Try multiple common selectors for content editor
+            # Select stylist if provided
+            if stylist_id:
+                self.select_stylist(stylist_id)
+
+            # Select coupon if provided
+            if coupon_name:
+                self.select_coupon(coupon_name)
+
+            # Fill content with image handling
+            final_content = self._prepare_content_with_images(content, image_paths or [])
+
+            # Find and fill content field
             content_selectors = [
                 'textarea[name="content"]',
                 '#content',
@@ -172,21 +286,20 @@ class SALONBoardClient:
             content_filled = False
             for selector in content_selectors:
                 if self.page.locator(selector).count() > 0:
-                    self.page.fill(selector, content)
+                    self.page.fill(selector, final_content)
                     content_filled = True
                     break
 
             if not content_filled:
                 raise Exception("Could not find content input field")
 
-            # Optional: Handle salon selection if multiple salons
-            if salon_id:
-                salon_selector = f'select[name="salon_id"], #salon_id'
-                if self.page.locator(salon_selector).count() > 0:
-                    self.page.select_option(salon_selector, salon_id)
+            # Upload images if using file upload
+            if image_paths:
+                self._upload_images(image_paths)
 
             # Take screenshot before submission for debugging
-            screenshot_path = f'/tmp/salon_board_before_submit_{int(time.time())}.png'
+            timestamp = int(time.time())
+            screenshot_path = f'/tmp/salon_board_before_submit_{timestamp}.png'
             self.page.screenshot(path=screenshot_path)
             logger.info(f"Screenshot saved: {screenshot_path}")
 
@@ -217,6 +330,10 @@ class SALONBoardClient:
             # Get final URL
             final_url = self.page.url
 
+            # Take screenshot after submission
+            final_screenshot_path = f'/tmp/salon_board_after_submit_{timestamp}.png'
+            self.page.screenshot(path=final_screenshot_path)
+
             # Check for success indicators
             success_indicators = [
                 '投稿しました',
@@ -226,8 +343,9 @@ class SALONBoardClient:
                 '/blog/',  # URL changed to blog list/detail
             ]
 
+            page_content = self.page.content().lower()
             success = any(
-                indicator in self.page.content().lower() or indicator in final_url.lower()
+                indicator.lower() in page_content or indicator.lower() in final_url.lower()
                 for indicator in success_indicators
             )
 
@@ -236,6 +354,7 @@ class SALONBoardClient:
                 return {
                     'success': True,
                     'url': final_url,
+                    'screenshot_path': final_screenshot_path,
                     'message': 'Blog post published successfully',
                 }
             else:
@@ -243,9 +362,50 @@ class SALONBoardClient:
                 return {
                     'success': False,
                     'url': final_url,
+                    'screenshot_path': final_screenshot_path,
                     'message': 'Publication status unclear',
                 }
 
         except Exception as e:
             logger.error(f"Failed to publish blog post: {e}")
             raise Exception(f"SALON BOARD publication failed: {str(e)}")
+
+    def _prepare_content_with_images(self, content: str, image_paths: List[str]) -> str:
+        """
+        Replace image placeholders with actual image handling
+
+        Args:
+            content: Content with placeholders
+            image_paths: List of image paths
+
+        Returns:
+            Processed content
+        """
+        # For now, just return content as-is
+        # Image placeholders will be handled by the rich editor
+        return content
+
+    def _upload_images(self, image_paths: List[str]) -> bool:
+        """
+        Upload images to the blog post
+
+        Args:
+            image_paths: List of image file paths
+
+        Returns:
+            True if upload successful
+        """
+        try:
+            for idx, path in enumerate(image_paths):
+                # Find file input
+                file_input_selector = 'input[type="file"]'
+                if self.page.locator(file_input_selector).count() > 0:
+                    self.page.set_input_files(file_input_selector, path)
+                    self.page.wait_for_timeout(2000)  # Wait for upload
+                    logger.info(f"Uploaded image {idx + 1}: {path}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Image upload error: {e}")
+            return False

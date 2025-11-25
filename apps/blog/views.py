@@ -7,13 +7,19 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.db import models
 from django.db.models import Q
-from .models import BlogPost
+from django.utils import timezone
+from .models import BlogPost, BlogImage, PostLog
 from .serializers import (
     BlogPostListSerializer,
     BlogPostDetailSerializer,
     BlogPostCreateSerializer,
     BlogPostUpdateSerializer,
+    BlogImageSerializer,
+    PostLogSerializer,
+    MAX_IMAGES_PER_POST,
 )
 
 
@@ -29,8 +35,11 @@ class BlogPostViewSet(viewsets.ModelViewSet):
     - DELETE /api/blog/posts/{id}/ - Delete post
     - POST /api/blog/posts/{id}/generate/ - Trigger AI generation
     - POST /api/blog/posts/{id}/publish/ - Trigger SALON BOARD publishing
+    - GET /api/blog/posts/{id}/images/ - List post images
+    - POST /api/blog/posts/{id}/images/ - Add image to post
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         """
@@ -52,14 +61,14 @@ class BlogPostViewSet(viewsets.ModelViewSet):
             ai_generated_bool = ai_generated.lower() in ['true', '1', 'yes']
             queryset = queryset.filter(ai_generated=ai_generated_bool)
 
-        # Search by title
+        # Search by title or content
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(
                 Q(title__icontains=search) | Q(content__icontains=search)
             )
 
-        return queryset.order_by('-created_at')
+        return queryset.select_related('user').prefetch_related('images').order_by('-created_at')
 
     def get_serializer_class(self):
         """
@@ -107,9 +116,9 @@ class BlogPostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not blog_post.ai_prompt:
+        if not blog_post.ai_prompt and not blog_post.keywords:
             return Response(
-                {'detail': 'AI prompt is required for generation'},
+                {'detail': 'AI prompt or keywords are required for generation'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -122,6 +131,10 @@ class BlogPostViewSet(viewsets.ModelViewSet):
 
         # Trigger Celery task
         task = generate_blog_content_task.delay(blog_post.id)
+
+        # Save task ID
+        blog_post.celery_task_id = task.id
+        blog_post.save(update_fields=['celery_task_id'])
 
         return Response({
             'detail': 'AI content generation started',
@@ -174,15 +187,129 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         blog_post.status = 'publishing'
         blog_post.save(update_fields=['status'])
 
+        # Create PostLog
+        post_log = PostLog.objects.create(
+            user=request.user,
+            blog_post=blog_post,
+            status='in_progress',
+            started_at=timezone.now()
+        )
+
         # Import here to avoid circular imports
         from .tasks import publish_to_salon_board_task
 
         # Trigger Celery task
-        task = publish_to_salon_board_task.delay(blog_post.id)
+        task = publish_to_salon_board_task.delay(blog_post.id, post_log.id)
+
+        # Save task ID
+        blog_post.celery_task_id = task.id
+        blog_post.save(update_fields=['celery_task_id'])
 
         return Response({
             'detail': 'SALON BOARD publishing started',
             'task_id': task.id,
             'post_id': blog_post.id,
+            'log_id': post_log.id,
             'status': blog_post.status,
         }, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=['get', 'post'], url_path='images')
+    def images(self, request, pk=None):
+        """
+        List or add images to blog post
+
+        Args:
+            request: HTTP request
+            pk: Blog post ID
+
+        Returns:
+            Response with images or created image
+        """
+        blog_post = self.get_object()
+
+        if request.method == 'GET':
+            images = blog_post.images.all()
+            serializer = BlogImageSerializer(images, many=True)
+            return Response(serializer.data)
+
+        elif request.method == 'POST':
+            # Check image count limit
+            if blog_post.images.count() >= MAX_IMAGES_PER_POST:
+                return Response(
+                    {'detail': f'Maximum {MAX_IMAGES_PER_POST} images allowed per post'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            image_file = request.FILES.get('image')
+            if not image_file:
+                return Response(
+                    {'detail': 'Image file is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Determine order
+            max_order = blog_post.images.aggregate(
+                max_order=models.Max('order')
+            )['max_order']
+            next_order = (max_order or -1) + 1
+
+            image = BlogImage.objects.create(
+                blog_post=blog_post,
+                image_file=image_file,
+                order=next_order
+            )
+
+            serializer = BlogImageSerializer(image)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class BlogImageViewSet(viewsets.ModelViewSet):
+    """
+    Blog image management viewset
+
+    Provides endpoints for:
+    - GET /api/blog/images/{id}/ - Get specific image
+    - PATCH /api/blog/images/{id}/ - Update image (order)
+    - DELETE /api/blog/images/{id}/ - Delete image
+    """
+    serializer_class = BlogImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Get images for current user's posts
+
+        Returns:
+            QuerySet of user's blog images
+        """
+        return BlogImage.objects.filter(
+            blog_post__user=self.request.user
+        ).select_related('blog_post')
+
+
+class PostLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Post log viewset (read-only)
+
+    Provides endpoints for:
+    - GET /api/blog/logs/ - List user's post logs
+    - GET /api/blog/logs/{id}/ - Get specific log
+    """
+    serializer_class = PostLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Get post logs for current user
+
+        Returns:
+            QuerySet of user's post logs
+        """
+        queryset = PostLog.objects.filter(user=self.request.user)
+
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset.select_related('blog_post', 'user').order_by('-started_at')

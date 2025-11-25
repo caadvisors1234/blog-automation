@@ -6,8 +6,6 @@ Serializers for user and authentication
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.blog.models import SALONBoardAccount
-from cryptography.fernet import Fernet
-from django.conf import settings
 
 User = get_user_model()
 
@@ -27,12 +25,15 @@ class UserSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'supabase_user_id',
+            'hpb_salon_url',
+            'hpb_salon_id',
             'date_joined',
             'has_salon_board_account',
         ]
         read_only_fields = [
             'id',
             'supabase_user_id',
+            'hpb_salon_id',  # Auto-extracted from URL
             'date_joined',
         ]
 
@@ -42,6 +43,36 @@ class UserSerializer(serializers.ModelSerializer):
             return hasattr(obj, 'salon_board_account') and obj.salon_board_account.is_active
         except SALONBoardAccount.DoesNotExist:
             return False
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating user profile
+    """
+
+    class Meta:
+        model = User
+        fields = [
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'hpb_salon_url',
+        ]
+
+    def update(self, instance, validated_data):
+        """
+        Update user and auto-extract salon ID from URL
+
+        Args:
+            instance: User instance
+            validated_data: Validated data
+
+        Returns:
+            Updated User instance
+        """
+        # Salon ID will be auto-extracted in model's save method
+        return super().update(instance, validated_data)
 
 
 class SALONBoardAccountSerializer(serializers.ModelSerializer):
@@ -54,7 +85,7 @@ class SALONBoardAccountSerializer(serializers.ModelSerializer):
         model = SALONBoardAccount
         fields = [
             'id',
-            'email',
+            'login_id',
             'password',
             'is_active',
             'created_at',
@@ -82,17 +113,19 @@ class SALONBoardAccountSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         user = self.context['request'].user
 
-        # Encrypt password
-        fernet = Fernet(settings.ENCRYPTION_KEY.encode())
-        encrypted_password = fernet.encrypt(password.encode()).decode()
+        if not password:
+            raise serializers.ValidationError({'password': 'Password is required'})
 
         # Create account
-        account = SALONBoardAccount.objects.create(
+        account = SALONBoardAccount(
             user=user,
-            email=validated_data['email'],
-            encrypted_password=encrypted_password,
+            login_id=validated_data['login_id'],
             is_active=validated_data.get('is_active', True)
         )
+
+        # Encrypt and set password
+        account.set_password(password)
+        account.save()
 
         return account
 
@@ -109,14 +142,13 @@ class SALONBoardAccountSerializer(serializers.ModelSerializer):
         """
         password = validated_data.pop('password', None)
 
-        # Update email and is_active
-        instance.email = validated_data.get('email', instance.email)
+        # Update login_id and is_active
+        instance.login_id = validated_data.get('login_id', instance.login_id)
         instance.is_active = validated_data.get('is_active', instance.is_active)
 
         # Update password if provided
         if password:
-            fernet = Fernet(settings.ENCRYPTION_KEY.encode())
-            instance.encrypted_password = fernet.encrypt(password.encode()).decode()
+            instance.set_password(password)
 
         instance.save()
         return instance

@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from rest_framework import serializers as drf_serializers
-from .serializers import UserSerializer, SALONBoardAccountSerializer
+from .serializers import UserSerializer, UserUpdateSerializer, SALONBoardAccountSerializer
 from apps.blog.models import SALONBoardAccount
 
 User = get_user_model()
@@ -20,8 +20,8 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     User management viewset
 
     Provides endpoints for:
-    - GET /api/users/me/ - Get current user profile
-    - PATCH /api/users/me/ - Update current user profile
+    - GET /api/accounts/users/me/ - Get current user profile
+    - PATCH /api/accounts/users/me/ - Update current user profile
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -43,14 +43,17 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             return Response(serializer.data)
 
         elif request.method == 'PATCH':
-            serializer = self.get_serializer(
+            serializer = UserUpdateSerializer(
                 request.user,
                 data=request.data,
-                partial=True
+                partial=True,
+                context={'request': request}
             )
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            return Response(serializer.data)
+
+            # Return full user data
+            return Response(UserSerializer(request.user).data)
 
 
 class SALONBoardAccountViewSet(viewsets.ModelViewSet):
@@ -58,11 +61,11 @@ class SALONBoardAccountViewSet(viewsets.ModelViewSet):
     SALON BOARD account management viewset
 
     Provides endpoints for:
-    - GET /api/salon-board-accounts/ - List user's SALON BOARD accounts
-    - POST /api/salon-board-accounts/ - Create new SALON BOARD account
-    - GET /api/salon-board-accounts/{id}/ - Get specific account
-    - PATCH /api/salon-board-accounts/{id}/ - Update account
-    - DELETE /api/salon-board-accounts/{id}/ - Delete account
+    - GET /api/accounts/salon-board-accounts/ - Get user's SALON BOARD account
+    - POST /api/accounts/salon-board-accounts/ - Create new SALON BOARD account
+    - GET /api/accounts/salon-board-accounts/{id}/ - Get specific account
+    - PATCH /api/accounts/salon-board-accounts/{id}/ - Update account
+    - DELETE /api/accounts/salon-board-accounts/{id}/ - Delete account
     """
     serializer_class = SALONBoardAccountSerializer
     permission_classes = [IsAuthenticated]
@@ -90,3 +93,24 @@ class SALONBoardAccountViewSet(viewsets.ModelViewSet):
             })
 
         serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='current')
+    def current(self, request):
+        """
+        Get current user's SALON BOARD account
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            SALON BOARD account data or 404
+        """
+        try:
+            account = request.user.salon_board_account
+            serializer = self.get_serializer(account)
+            return Response(serializer.data)
+        except SALONBoardAccount.DoesNotExist:
+            return Response(
+                {'detail': 'No SALON BOARD account found'},
+                status=status.HTTP_404_NOT_FOUND
+            )

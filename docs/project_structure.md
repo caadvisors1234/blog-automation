@@ -18,129 +18,80 @@ blog-automation/
 ├── requirements.txt          # Python依存パッケージ
 ├── requirements-dev.txt      # 開発用パッケージ
 ├── manage.py
-├── pytest.ini               # テスト設定
-├── README.md
+├── CLAUDE.md                 # AI アシスタント向けガイドライン
 │
-├── config/                  # Django設定ディレクトリ
+├── config/                   # Django設定ディレクトリ
 │   ├── __init__.py
-│   ├── settings.py          # メイン設定ファイル
-│   ├── settings/            # 環境別設定（オプション）
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── development.py
-│   │   ├── production.py
-│   │   └── test.py
-│   ├── urls.py              # ルートURLconf
-│   ├── asgi.py              # ASGI設定（Django Channels用）
-│   ├── wsgi.py              # WSGI設定
-│   └── celery.py            # Celery設定
+│   ├── settings.py           # メイン設定ファイル
+│   ├── urls.py               # ルートURLconf
+│   ├── asgi.py               # ASGI設定（Django Channels用）
+│   ├── wsgi.py               # WSGI設定
+│   └── celery.py             # Celery設定
 │
-├── apps/                    # Djangoアプリケーション
-│   ├── accounts/            # ユーザー管理・認証
+├── apps/                     # Djangoアプリケーション
+│   ├── __init__.py
+│   │
+│   ├── accounts/             # ユーザー管理・認証
 │   │   ├── __init__.py
 │   │   ├── admin.py
 │   │   ├── apps.py
-│   │   ├── backends.py      # Supabase認証バックエンド
-│   │   ├── forms.py
-│   │   ├── middleware.py    # 認証ミドルウェア
-│   │   ├── models.py        # Userモデル
+│   │   ├── backends.py       # Supabase認証バックエンド
+│   │   ├── middleware.py     # 認証ミドルウェア
+│   │   ├── models.py         # Userモデル
+│   │   ├── serializers.py    # DRFシリアライザー
 │   │   ├── urls.py
-│   │   ├── utils.py         # 暗号化ユーティリティ
-│   │   ├── views.py
+│   │   ├── utils.py          # 暗号化ユーティリティ
+│   │   ├── views.py          # ViewSet
 │   │   ├── migrations/
 │   │   └── tests/
-│   │       ├── __init__.py
-│   │       ├── test_models.py
-│   │       └── test_views.py
 │   │
-│   ├── blog/                # ブログ投稿機能
+│   ├── blog/                 # ブログ投稿機能
 │   │   ├── __init__.py
 │   │   ├── admin.py
 │   │   ├── apps.py
-│   │   ├── models.py        # BlogPost, BlogImage等
-│   │   ├── forms.py
+│   │   ├── models.py         # BlogPost, BlogImage, PostLog, SALONBoardAccount
+│   │   ├── serializers.py    # DRFシリアライザー
 │   │   ├── urls.py
-│   │   ├── views.py
-│   │   ├── tasks.py         # Celeryタスク
-│   │   ├── consumers.py     # WebSocketコンシューマー
-│   │   ├── routing.py       # WebSocketルーティング
-│   │   ├── ai_generator.py  # Gemini統合
-│   │   ├── scraper.py       # HPBスクレイピング
-│   │   ├── automation.py    # Playwright自動化
-│   │   ├── selectors.py     # セレクタ定義
-│   │   ├── exceptions.py    # カスタム例外
+│   │   ├── views.py          # ViewSet
+│   │   ├── tasks.py          # Celeryタスク
+│   │   ├── routing.py        # WebSocketルーティング
+│   │   ├── gemini_client.py  # Gemini AI統合
+│   │   ├── hpb_scraper.py    # HPBスクレイピング
+│   │   ├── salon_board_client.py  # Playwright自動化
 │   │   ├── migrations/
 │   │   └── tests/
-│   │       ├── __init__.py
-│   │       ├── test_models.py
-│   │       ├── test_views.py
-│   │       ├── test_tasks.py
-│   │       ├── test_ai_generator.py
-│   │       └── test_automation.py
 │   │
-│   └── core/                # 共通機能
+│   └── core/                 # 共通機能
 │       ├── __init__.py
-│       ├── management/      # カスタムコマンド
-│       │   ├── __init__.py
-│       │   └── commands/
-│       │       ├── __init__.py
-│       │       └── seed_data.py
-│       ├── middleware.py    # 共通ミドルウェア
-│       ├── templatetags/    # カスタムテンプレートタグ
-│       │   ├── __init__.py
-│       │   └── custom_filters.py
-│       └── utils.py         # 共通ユーティリティ
+│       ├── admin.py
+│       ├── apps.py
+│       ├── models.py
+│       ├── urls.py
+│       ├── views.py
+│       ├── migrations/
+│       └── tests/
 │
-├── templates/               # Djangoテンプレート
-│   ├── base.html           # ベーステンプレート
-│   ├── includes/           # 再利用可能なパーツ
-│   │   ├── header.html
-│   │   ├── footer.html
-│   │   ├── messages.html
-│   │   └── progress_bar.html
-│   ├── accounts/
-│   │   ├── login.html
-│   │   ├── signup.html
-│   │   └── settings.html
-│   ├── blog/
-│   │   ├── list.html       # 投稿一覧
-│   │   ├── create.html     # 新規作成
-│   │   ├── detail.html     # 投稿詳細
-│   │   └── history.html    # 投稿履歴
-│   └── errors/
-│       ├── 404.html
-│       ├── 500.html
-│       └── 503.html
+├── templates/                # Djangoテンプレート（将来用）
 │
-├── static/                 # 静的ファイル
-│   ├── css/
-│   │   ├── tailwind.css    # Tailwind CSS
-│   │   └── custom.css      # カスタムスタイル
-│   ├── js/
-│   │   ├── websocket.js    # WebSocket処理
-│   │   ├── form-validation.js
-│   │   └── image-preview.js
-│   └── images/
-│       └── logo.png
+├── static/                   # 静的ファイル
 │
-├── media/                  # アップロードファイル
-│   ├── blog_images/        # ブログ画像
-│   ├── screenshots/        # 投稿完了スクリーンショット
-│   └── errors/             # エラー時のスクリーンショット
+├── staticfiles/              # 収集済み静的ファイル
 │
-├── logs/                   # ログファイル
-│   ├── app.log
-│   ├── celery.log
-│   └── error.log
+├── media/                    # アップロードファイル
+│   └── blog_images/          # ブログ画像
 │
-├── tests/                  # 統合テスト
-│   ├── __init__.py
-│   ├── conftest.py         # pytestフィクスチャ
-│   ├── test_integration.py
-│   └── fixtures/
-│       └── test_data.json
+├── logs/                     # ログファイル
+│   └── app.log
 │
-└── docs/                   # ドキュメント
+├── tests/                    # 統合テスト
+│   ├── README.md
+│   ├── test_api.py
+│   ├── test_celery_task.py
+│   ├── test_gemini.py
+│   ├── test_hpb_scraper.py
+│   └── test_playwright.py
+│
+└── docs/                     # ドキュメント
     ├── system_requirements.md
     ├── playwright_automation_spec.md
     ├── infrastructure_setup.md
@@ -148,7 +99,8 @@ blog-automation/
     ├── project_structure.md          # 本ドキュメント
     ├── database_schema.md
     ├── api_endpoints.md
-    └── frontend_design.md
+    ├── frontend_design.md
+    └── implementation_plan.md
 ```
 
 ---
@@ -159,11 +111,10 @@ blog-automation/
 **責務**:
 - Supabase認証との統合
 - ユーザー情報管理
-- SALON BOARD認証情報の暗号化保存
 - HPBサロン設定管理
 
 **主要モデル**:
-- `User`: 拡張ユーザーモデル
+- `User`: 拡張ユーザーモデル（supabase_user_id, hpb_salon_url, hpb_salon_id）
 
 ### 3.2 blog（ブログ投稿）
 **責務**:
@@ -171,21 +122,19 @@ blog-automation/
 - 画像管理
 - 自動投稿（Playwright統合）
 - スクレイピング（マスタデータ取得）
-- 投稿履歴管理
-- WebSocketでのリアルタイム進捗通知
+- 投稿履歴・ログ管理
+- SALON BOARDアカウント管理
 
 **主要モデル**:
 - `BlogPost`: 投稿記事
 - `BlogImage`: 画像
 - `PostLog`: 投稿ログ
-- `StylistMaster`: スタイリスト情報（キャッシュ用、オプション）
-- `CouponMaster`: クーポン情報（キャッシュ用、オプション）
+- `SALONBoardAccount`: SALON BOARD認証情報（暗号化）
 
 ### 3.3 core（共通機能）
 **責務**:
 - 全アプリ共通のユーティリティ
-- カスタムテンプレートタグ・フィルタ
-- 管理コマンド
+- ヘルスチェック（将来実装）
 
 ---
 
@@ -197,6 +146,7 @@ blog-automation/
 # Django
 Django==5.0.0
 django-environ==0.11.2
+djangorestframework==3.14.0
 
 # Database
 psycopg2-binary==2.9.9
@@ -210,17 +160,18 @@ channels-redis==4.1.0
 celery==5.3.4
 redis==5.0.1
 django-celery-results==2.5.1
-django-celery-beat==2.5.0
+django-celery-beat==2.6.0
 
 # Authentication
-supabase==2.3.0
-PyJWT==2.8.0
+supabase==2.24.0
+PyJWT>=2.10.1
 cryptography==41.0.7
 
 # AI & Scraping
-google-genai==0.2.0
+google-genai==0.2.2
 beautifulsoup4==4.12.2
 lxml==4.9.4
+requests==2.31.0
 
 # Browser Automation
 playwright==1.40.0
@@ -228,6 +179,9 @@ playwright==1.40.0
 # Utilities
 python-dotenv==1.0.0
 Pillow==10.1.0
+
+# Monitoring
+flower==2.0.1
 ```
 
 ### 4.2 requirements-dev.txt
@@ -248,8 +202,7 @@ flake8==7.0.0
 isort==5.13.2
 mypy==1.7.1
 
-# Monitoring
-flower==2.0.1
+# Debugging
 django-debug-toolbar==4.2.0
 ```
 
@@ -283,9 +236,6 @@ GEMINI_API_KEY=your-gemini-api-key
 
 # Encryption
 ENCRYPTION_KEY=your-fernet-key-here
-
-# Email (Optional, for future)
-EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 
 # Logging
 LOG_LEVEL=INFO
@@ -390,11 +340,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   celery_worker:
     build: .
@@ -449,14 +394,13 @@ volumes:
 
 ### 5.1 Pythonファイル
 - **モデル**: `models.py` - 単一モデルでも複数モデルでも
-- **ビュー**: `views.py` - 関数ベースまたはクラスベース
-- **URL設定**: `urls.py`
-- **フォーム**: `forms.py`
+- **ビュー**: `views.py` - ViewSetベース（Django REST Framework）
+- **URL設定**: `urls.py` - DRF Routerベース
+- **シリアライザー**: `serializers.py` - DRFシリアライザー
 - **タスク**: `tasks.py` - Celeryタスク
 - **ユーティリティ**: `utils.py` - 汎用関数
-- **例外**: `exceptions.py` - カスタム例外クラス
 
-### 5.2 テンプレート
+### 5.2 テンプレート（将来実装）
 - **スネークケース**: `blog_list.html`、`create_post.html`
 - **パーシャル**: `_form.html`、`_sidebar.html`（アンダースコアで開始）
 
@@ -477,11 +421,12 @@ from datetime import datetime
 # 2. サードパーティライブラリ
 from django.db import models
 from django.contrib.auth import get_user_model
+from rest_framework import viewsets, serializers
 from celery import shared_task
 
 # 3. ローカルアプリケーション
 from apps.accounts.models import User
-from apps.blog.utils import encrypt_data
+from apps.blog.models import BlogPost
 from config.settings import MEDIA_ROOT
 ```
 
@@ -507,11 +452,11 @@ def generate_blog_content(keywords: str, tone: str, image_count: int) -> dict:
         image_count (int): 画像枚数
 
     Returns:
-        dict: {"title": str, "body": str, "usage": int}
+        dict: {"title": str, "content": str}
 
     Raises:
         ValueError: キーワードが空の場合
-        APIError: Gemini API呼び出し失敗時
+        Exception: Gemini API呼び出し失敗時
     """
     pass
 ```
@@ -535,38 +480,26 @@ def get_user_blog_posts(user_id: int, limit: Optional[int] = None) -> List['Blog
 
 ### 8.1 単体テスト
 ```python
-# apps/blog/tests/test_ai_generator.py
+# tests/test_gemini.py
 import pytest
-from apps.blog.ai_generator import generate_blog_content
 
-@pytest.mark.django_db
-class TestAIGenerator:
+class TestGeminiClient:
     def test_generate_blog_content_success(self):
-        result = generate_blog_content(
-            keywords="カット カラー",
-            tone="親しみやすい",
-            image_count=2
-        )
-        assert 'title' in result
-        assert len(result['title']) <= 25
-        assert 'body' in result
+        # Test AI content generation
+        pass
 ```
 
 ### 8.2 統合テスト
 ```python
-# tests/test_integration.py
+# tests/test_api.py
 import pytest
-from django.test import Client
+from rest_framework.test import APIClient
 
 @pytest.mark.django_db
-class TestBlogWorkflow:
-    def test_full_blog_posting_workflow(self):
-        client = Client()
-        # ログイン
-        # 画像アップロード
-        # ブログ作成
-        # 自動投稿タスク起動
-        # 完了確認
+class TestBlogAPI:
+    def test_create_blog_post(self):
+        client = APIClient()
+        # Test API endpoint
         pass
 ```
 
@@ -615,6 +548,7 @@ __pycache__/
 *.so
 .Python
 venv/
+.venv/
 env/
 ENV/
 
@@ -650,6 +584,9 @@ htmlcov/
 # Playwright
 playwright-report/
 test-results/
+
+# Serena
+.serena/
 ```
 
 ---
@@ -707,7 +644,6 @@ docker-compose exec web python manage.py shell
 
 ### 12.1 静的ファイル
 - 本番環境ではNginxなどで配信
-- Tailwind CSSはプロダクションビルド使用
 
 ### 12.2 メディアファイル
 - 画像は `/media/blog_images/` に保存
@@ -723,14 +659,13 @@ docker-compose exec web python manage.py shell
 
 このプロジェクト構造により：
 - **明確な責務分離**: アプリごとに役割が明確
+- **RESTful API**: Django REST Frameworkを活用
 - **スケーラビリティ**: 機能追加が容易
 - **テスト可能性**: 各コンポーネントを独立してテスト
 - **保守性**: 一貫した命名規則とディレクトリ構成
 
-次のステップでは、この構造を基にデータベーススキーマを詳細設計します。
-
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年1月
-**ステータス**: 初版完成
+**最終更新**: 2025年11月
+**ステータス**: 実装完了・ドキュメント更新

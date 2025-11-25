@@ -12,20 +12,18 @@ PostgreSQL 16を使用し、Django ORMでモデルを実装します。
 erDiagram
     users ||--o{ blog_posts : "作成"
     users ||--o{ post_logs : "実行"
+    users ||--o| salon_board_accounts : "所有"
     blog_posts ||--o{ blog_images : "含む"
     blog_posts ||--o| post_logs : "ログ記録"
 
     users {
         int id PK
-        string supabase_uid UK
+        string supabase_user_id UK
         string username
         string email
         string hpb_salon_url
         string hpb_salon_id
-        text salonboard_user_id "encrypted"
-        text salonboard_password "encrypted"
-        datetime created_at
-        datetime updated_at
+        datetime date_joined
         boolean is_active
         boolean is_staff
     }
@@ -33,18 +31,21 @@ erDiagram
     blog_posts {
         int id PK
         int user_id FK
-        string title
-        text body
-        text generated_body "AI生成元"
+        string title "max 25 chars"
+        text content
+        text generated_content
         string tone
         string keywords
         string stylist_id
         string coupon_name
-        string status "draft/processing/completed/failed"
+        string status
         string celery_task_id
+        string salon_board_url
+        boolean ai_generated
+        text ai_prompt
+        datetime published_at
         datetime created_at
         datetime updated_at
-        datetime posted_at
     }
 
     blog_images {
@@ -58,14 +59,24 @@ erDiagram
     post_logs {
         int id PK
         int user_id FK
-        int blog_post_id FK
-        string status "success/failed"
+        int blog_post_id FK "UNIQUE"
+        string status
         text error_message
         string screenshot_path
-        text scraping_data "JSON"
+        json scraping_data
         int duration_seconds
         datetime started_at
         datetime completed_at
+    }
+
+    salon_board_accounts {
+        int id PK
+        int user_id FK "UNIQUE"
+        string login_id
+        text encrypted_password
+        boolean is_active
+        datetime created_at
+        datetime updated_at
     }
 ```
 
@@ -84,80 +95,38 @@ from django.db import models
 
 class User(AbstractUser):
     """
-    拡張ユーザーモデル
+    Custom user model for Supabase integration and HPB settings
     """
-    # Supabase認証
-    supabase_uid = models.CharField(
+    # Supabase integration
+    supabase_user_id = models.CharField(
         max_length=255,
         unique=True,
         null=True,
         blank=True,
         db_index=True,
-        help_text="SupabaseのユーザーUID"
+        help_text='User ID from Supabase authentication system'
     )
 
-    # HPB設定
+    # HPB (Hot Pepper Beauty) settings
     hpb_salon_url = models.URLField(
         max_length=500,
         blank=True,
-        help_text="HPBサロンTOPページURL (例: https://beauty.hotpepper.jp/slnH000xxxxx/)"
+        help_text='HPB salon top page URL'
     )
-
     hpb_salon_id = models.CharField(
         max_length=20,
         blank=True,
         db_index=True,
-        help_text="抽出されたサロンID (例: H000123456)"
+        help_text='Extracted salon ID (e.g., H000123456)'
     )
-
-    # SALON BOARD認証情報（暗号化）
-    salonboard_user_id = models.TextField(
-        blank=True,
-        help_text="SALON BOARDログインID（暗号化済み）"
-    )
-
-    salonboard_password = models.TextField(
-        blank=True,
-        help_text="SALON BOARDパスワード（暗号化済み）"
-    )
-
-    # タイムスタンプ
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'users'
-        verbose_name = 'ユーザー'
-        verbose_name_plural = 'ユーザー'
+        db_table = 'accounts_user'
         indexes = [
-            models.Index(fields=['supabase_uid']),
+            models.Index(fields=['supabase_user_id']),
             models.Index(fields=['hpb_salon_id']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=['date_joined']),
         ]
-
-    def __str__(self):
-        return self.username
-
-    def save_credentials(self, login_id: str, password: str):
-        """
-        SALON BOARD認証情報を暗号化して保存
-        """
-        from apps.accounts.utils import encrypt_credential
-        self.salonboard_user_id = encrypt_credential(login_id)
-        self.salonboard_password = encrypt_credential(password)
-        self.save()
-
-    def get_credentials(self) -> tuple:
-        """
-        SALON BOARD認証情報を復号化して取得
-
-        Returns:
-            tuple: (login_id, password)
-        """
-        from apps.accounts.utils import decrypt_credential
-        login_id = decrypt_credential(self.salonboard_user_id)
-        password = decrypt_credential(self.salonboard_password)
-        return login_id, password
 ```
 
 **カラム詳細**:
@@ -165,23 +134,16 @@ class User(AbstractUser):
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
 | id | INTEGER | PRIMARY KEY | 自動採番ID |
-| supabase_uid | VARCHAR(255) | UNIQUE, NULL可 | Supabase認証UID |
+| supabase_user_id | VARCHAR(255) | UNIQUE, NULL可 | Supabase認証UID |
 | username | VARCHAR(150) | UNIQUE | ユーザー名（Django標準） |
 | email | VARCHAR(254) | | メールアドレス（Django標準） |
 | password | VARCHAR(128) | | パスワードハッシュ（Django標準） |
 | hpb_salon_url | VARCHAR(500) | | HPBサロンURL |
-| hpb_salon_id | VARCHAR(20) | INDEX | サロンID（抽出済み） |
-| salonboard_user_id | TEXT | | SALON BOARDログインID（暗号化） |
-| salonboard_password | TEXT | | SALON BOARDパスワード（暗号化） |
+| hpb_salon_id | VARCHAR(20) | INDEX | サロンID（自動抽出） |
 | is_active | BOOLEAN | DEFAULT TRUE | アカウント有効フラグ |
 | is_staff | BOOLEAN | DEFAULT FALSE | 管理者フラグ |
-| created_at | TIMESTAMP | | 作成日時 |
-| updated_at | TIMESTAMP | | 更新日時 |
-
-**インデックス**:
-- `supabase_uid` (UNIQUE)
-- `hpb_salon_id`
-- `created_at`
+| date_joined | TIMESTAMP | | 登録日時 |
+| last_login | TIMESTAMP | NULL可 | 最終ログイン |
 
 ---
 
@@ -189,117 +151,62 @@ class User(AbstractUser):
 
 ```python
 # apps/blog/models.py
-from django.db import models
-from django.conf import settings
-
 class BlogPost(models.Model):
     """
-    ブログ投稿モデル
+    Blog post model
     """
-
     STATUS_CHOICES = [
-        ('draft', '下書き'),
-        ('processing', '処理中'),
-        ('completed', '完了'),
-        ('failed', '失敗'),
+        ('draft', 'Draft'),
+        ('generating', 'AI Generating'),
+        ('ready', 'Ready to Publish'),
+        ('publishing', 'Publishing'),
+        ('published', 'Published'),
+        ('failed', 'Failed'),
     ]
 
-    # 関連
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='blog_posts',
-        help_text="投稿者"
+        related_name='blog_posts'
     )
-
-    # コンテンツ
-    title = models.CharField(
-        max_length=25,
-        help_text="ブログタイトル（25文字以内）"
-    )
-
-    body = models.TextField(
-        help_text="最終的な本文（画像プレースホルダー含む）"
-    )
-
-    generated_body = models.TextField(
-        blank=True,
-        help_text="AI生成された元の本文（バックアップ用）"
-    )
-
-    # 生成パラメータ
-    tone = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="トーン＆マナー"
-    )
-
-    keywords = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text="キーワード"
-    )
-
-    # SALON BOARD投稿パラメータ
-    stylist_id = models.CharField(
-        max_length=20,
-        blank=True,
-        help_text="スタイリストID (T番号)"
-    )
-
-    coupon_name = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="クーポン名"
-    )
-
-    # ステータス管理
+    title = models.CharField(max_length=25)
+    content = models.TextField()
+    generated_content = models.TextField(blank=True)
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='draft',
-        db_index=True,
-        help_text="投稿ステータス"
+        db_index=True
     )
 
-    celery_task_id = models.CharField(
-        max_length=255,
-        blank=True,
-        db_index=True,
-        help_text="Celeryタスクid"
-    )
+    # AI generation
+    ai_prompt = models.TextField(blank=True)
+    tone = models.CharField(max_length=50, blank=True)
+    keywords = models.CharField(max_length=200, blank=True)
+    ai_generated = models.BooleanField(default=False)
 
-    # タイムスタンプ
+    # SALON BOARD parameters
+    stylist_id = models.CharField(max_length=20, blank=True)
+    coupon_name = models.CharField(max_length=100, blank=True)
+    celery_task_id = models.CharField(max_length=255, blank=True, db_index=True)
+
+    # Result
+    salon_board_url = models.URLField(blank=True, max_length=500)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    posted_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="SALON BOARDへの投稿完了日時"
-    )
 
     class Meta:
         db_table = 'blog_posts'
-        verbose_name = 'ブログ投稿'
-        verbose_name_plural = 'ブログ投稿'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['status']),
             models.Index(fields=['celery_task_id']),
-            models.Index(fields=['-posted_at']),
+            models.Index(fields=['-published_at']),
         ]
-
-    def __str__(self):
-        return f"{self.title} ({self.user.username})"
-
-    def get_image_count(self) -> int:
-        """画像数を取得"""
-        return self.images.count()
-
-    def is_processable(self) -> bool:
-        """投稿処理可能か判定"""
-        return self.status in ['draft'] and self.images.exists()
 ```
 
 **カラム詳細**:
@@ -308,24 +215,21 @@ class BlogPost(models.Model):
 |---------|-----|------|------|
 | id | INTEGER | PRIMARY KEY | 自動採番ID |
 | user_id | INTEGER | FOREIGN KEY | ユーザーID |
-| title | VARCHAR(25) | NOT NULL | タイトル |
-| body | TEXT | NOT NULL | 本文 |
-| generated_body | TEXT | | AI生成元本文 |
+| title | VARCHAR(25) | NOT NULL | タイトル（25文字以内） |
+| content | TEXT | NOT NULL | 本文 |
+| generated_content | TEXT | | AI生成元本文（バックアップ） |
 | tone | VARCHAR(50) | | トーン |
 | keywords | VARCHAR(200) | | キーワード |
-| stylist_id | VARCHAR(20) | | スタイリストID |
+| ai_prompt | TEXT | | AIプロンプト |
+| ai_generated | BOOLEAN | DEFAULT FALSE | AI生成フラグ |
+| stylist_id | VARCHAR(20) | | スタイリストID（T番号） |
 | coupon_name | VARCHAR(100) | | クーポン名 |
 | status | VARCHAR(20) | INDEX | ステータス |
 | celery_task_id | VARCHAR(255) | INDEX | タスクID |
+| salon_board_url | VARCHAR(500) | | 投稿URL |
+| published_at | TIMESTAMP | NULL可 | 投稿日時 |
 | created_at | TIMESTAMP | | 作成日時 |
 | updated_at | TIMESTAMP | | 更新日時 |
-| posted_at | TIMESTAMP | NULL可 | 投稿日時 |
-
-**インデックス**:
-- `(user_id, created_at DESC)`（複合）
-- `status`
-- `celery_task_id`
-- `posted_at DESC`
 
 ---
 
@@ -335,54 +239,24 @@ class BlogPost(models.Model):
 # apps/blog/models.py
 class BlogImage(models.Model):
     """
-    ブログ画像モデル
+    Blog image model
     """
-
     blog_post = models.ForeignKey(
         BlogPost,
         on_delete=models.CASCADE,
-        related_name='images',
-        help_text="関連ブログ投稿"
+        related_name='images'
     )
-
-    image_file = models.ImageField(
-        upload_to='blog_images/%Y/%m/%d/',
-        help_text="画像ファイル"
-    )
-
-    order = models.PositiveSmallIntegerField(
-        default=0,
-        help_text="表示順序（0始まり）"
-    )
-
+    image_file = models.ImageField(upload_to='blog_images/%Y/%m/%d/')
+    order = models.PositiveSmallIntegerField(default=0)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'blog_images'
-        verbose_name = 'ブログ画像'
-        verbose_name_plural = 'ブログ画像'
         ordering = ['blog_post', 'order']
         unique_together = [['blog_post', 'order']]
         indexes = [
             models.Index(fields=['blog_post', 'order']),
         ]
-
-    def __str__(self):
-        return f"Image {self.order+1} for {self.blog_post.title}"
-
-    @property
-    def image_url(self) -> str:
-        """画像URLを取得"""
-        if self.image_file:
-            return self.image_file.url
-        return ""
-
-    @property
-    def file_path(self) -> str:
-        """ファイルパスを取得"""
-        if self.image_file:
-            return self.image_file.path
-        return ""
 ```
 
 **カラム詳細**:
@@ -392,14 +266,11 @@ class BlogImage(models.Model):
 | id | INTEGER | PRIMARY KEY | 自動採番ID |
 | blog_post_id | INTEGER | FOREIGN KEY | ブログ投稿ID |
 | image_file | VARCHAR(255) | NOT NULL | 画像ファイルパス |
-| order | SMALLINT | NOT NULL | 表示順序 |
+| order | SMALLINT | NOT NULL | 表示順序（0始まり） |
 | uploaded_at | TIMESTAMP | | アップロード日時 |
 
 **制約**:
 - UNIQUE (blog_post_id, order)
-
-**インデックス**:
-- `(blog_post_id, order)`（複合）
 
 ---
 
@@ -409,93 +280,41 @@ class BlogImage(models.Model):
 # apps/blog/models.py
 class PostLog(models.Model):
     """
-    投稿ログモデル
+    Post execution log model
     """
-
     STATUS_CHOICES = [
-        ('success', '成功'),
-        ('failed', '失敗'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
     ]
 
-    # 関連
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='post_logs',
-        help_text="実行ユーザー"
+        related_name='post_logs'
     )
-
     blog_post = models.OneToOneField(
         BlogPost,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='log',
-        help_text="関連ブログ投稿"
+        related_name='log'
     )
-
-    # ステータス
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        db_index=True,
-        help_text="実行結果"
-    )
-
-    error_message = models.TextField(
-        blank=True,
-        help_text="エラーメッセージ"
-    )
-
-    # 記録データ
-    screenshot_path = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="完了スクリーンショットパス"
-    )
-
-    scraping_data = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="スクレイピングで取得したデータ（JSON）"
-    )
-
-    duration_seconds = models.IntegerField(
-        default=0,
-        help_text="処理時間（秒）"
-    )
-
-    # タイムスタンプ
-    started_at = models.DateTimeField(
-        help_text="処理開始日時"
-    )
-
-    completed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="処理完了日時"
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, db_index=True)
+    error_message = models.TextField(blank=True)
+    screenshot_path = models.CharField(max_length=500, blank=True)
+    scraping_data = models.JSONField(default=dict, blank=True)
+    duration_seconds = models.IntegerField(default=0)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'post_logs'
-        verbose_name = '投稿ログ'
-        verbose_name_plural = '投稿ログ'
         ordering = ['-started_at']
         indexes = [
             models.Index(fields=['user', '-started_at']),
             models.Index(fields=['status']),
             models.Index(fields=['-completed_at']),
         ]
-
-    def __str__(self):
-        return f"Log {self.id} - {self.status} ({self.user.username})"
-
-    def calculate_duration(self):
-        """処理時間を計算"""
-        if self.completed_at and self.started_at:
-            delta = self.completed_at - self.started_at
-            self.duration_seconds = int(delta.total_seconds())
-            self.save(update_fields=['duration_seconds'])
 ```
 
 **カラム詳細**:
@@ -513,10 +332,55 @@ class PostLog(models.Model):
 | started_at | TIMESTAMP | | 開始日時 |
 | completed_at | TIMESTAMP | NULL可 | 完了日時 |
 
-**インデックス**:
-- `(user_id, started_at DESC)`（複合）
-- `status`
-- `completed_at DESC`
+---
+
+### 3.5 salon_board_accounts（SALON BOARDアカウント）
+
+```python
+# apps/blog/models.py
+class SALONBoardAccount(models.Model):
+    """
+    SALON BOARD account information (encrypted)
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='salon_board_account'
+    )
+    login_id = models.CharField(max_length=255)
+    encrypted_password = models.TextField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'salon_board_accounts'
+
+    def get_credentials(self) -> tuple:
+        """Get decrypted credentials"""
+        from cryptography.fernet import Fernet
+        fernet = Fernet(settings.ENCRYPTION_KEY.encode())
+        password = fernet.decrypt(self.encrypted_password.encode()).decode()
+        return self.login_id, password
+
+    def set_password(self, password: str):
+        """Encrypt and set password"""
+        from cryptography.fernet import Fernet
+        fernet = Fernet(settings.ENCRYPTION_KEY.encode())
+        self.encrypted_password = fernet.encrypt(password.encode()).decode()
+```
+
+**カラム詳細**:
+
+| カラム名 | 型 | 制約 | 説明 |
+|---------|-----|------|------|
+| id | INTEGER | PRIMARY KEY | 自動採番ID |
+| user_id | INTEGER | FOREIGN KEY, UNIQUE | ユーザーID |
+| login_id | VARCHAR(255) | NOT NULL | ログインID |
+| encrypted_password | TEXT | NOT NULL | 暗号化パスワード |
+| is_active | BOOLEAN | DEFAULT TRUE | 有効フラグ |
+| created_at | TIMESTAMP | | 作成日時 |
+| updated_at | TIMESTAMP | | 更新日時 |
 
 ---
 
@@ -542,106 +406,34 @@ class PostLog(models.Model):
 - **ON DELETE**: SET NULL（投稿削除時はログは残す）
 - **related_name**: `log`
 
+### 4.5 users → salon_board_accounts
+- **関係**: 1対1
+- **ON DELETE**: CASCADE（ユーザー削除時はアカウントも削除）
+- **related_name**: `salon_board_account`
+
 ---
 
 ## 5. Django Celeryテーブル
 
 ### 5.1 django_celery_results_taskresult
-
 Celeryタスク結果を保存（`django-celery-results`により自動生成）
 
-```sql
-CREATE TABLE django_celery_results_taskresult (
-    id INTEGER PRIMARY KEY,
-    task_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50),
-    content_type VARCHAR(128),
-    content_encoding VARCHAR(64),
-    result TEXT,
-    date_done TIMESTAMP,
-    traceback TEXT,
-    meta TEXT
-);
-
-CREATE INDEX idx_taskresult_task_id ON django_celery_results_taskresult(task_id);
-CREATE INDEX idx_taskresult_status ON django_celery_results_taskresult(status);
-CREATE INDEX idx_taskresult_date_done ON django_celery_results_taskresult(date_done);
-```
-
 ### 5.2 django_celery_beat_periodictask
-
 定期タスク設定（`django-celery-beat`により自動生成）
-
-```sql
-CREATE TABLE django_celery_beat_periodictask (
-    id INTEGER PRIMARY KEY,
-    name VARCHAR(200) UNIQUE NOT NULL,
-    task VARCHAR(200) NOT NULL,
-    args TEXT,
-    kwargs TEXT,
-    queue VARCHAR(200),
-    enabled BOOLEAN DEFAULT TRUE,
-    last_run_at TIMESTAMP,
-    total_run_count INTEGER DEFAULT 0,
-    date_changed TIMESTAMP,
-    description TEXT
-);
-```
 
 ---
 
 ## 6. マイグレーション戦略
 
-### 6.1 初期マイグレーション
+### 6.1 マイグレーション実行
 
 ```bash
-# 1. accountsアプリのマイグレーション作成
+# 1. マイグレーション作成
 python manage.py makemigrations accounts
-
-# 2. blogアプリのマイグレーション作成
 python manage.py makemigrations blog
 
-# 3. マイグレーション適用
+# 2. マイグレーション適用
 python manage.py migrate
-```
-
-### 6.2 マイグレーションファイル例
-
-```python
-# apps/accounts/migrations/0001_initial.py
-from django.db import migrations, models
-import django.contrib.auth.models
-
-class Migration(migrations.Migration):
-    initial = True
-
-    dependencies = [
-        ('auth', '0012_alter_user_first_name_max_length'),
-    ]
-
-    operations = [
-        migrations.CreateModel(
-            name='User',
-            fields=[
-                ('id', models.BigAutoField(primary_key=True)),
-                ('password', models.CharField(max_length=128)),
-                ('last_login', models.DateTimeField(blank=True, null=True)),
-                ('is_superuser', models.BooleanField(default=False)),
-                ('username', models.CharField(max_length=150, unique=True)),
-                ('email', models.EmailField(max_length=254)),
-                # ... その他のフィールド
-                ('supabase_uid', models.CharField(max_length=255, unique=True, null=True)),
-                ('hpb_salon_url', models.URLField(max_length=500, blank=True)),
-                # ... カスタムフィールド
-            ],
-            options={
-                'db_table': 'users',
-            },
-            managers=[
-                ('objects', django.contrib.auth.models.UserManager()),
-            ],
-        ),
-    ]
 ```
 
 ---
@@ -650,15 +442,7 @@ class Migration(migrations.Migration):
 
 ### 7.1 複合インデックス
 
-**目的**: よく使われるクエリを高速化
-
 ```python
-# users テーブル
-indexes = [
-    models.Index(fields=['supabase_uid']),
-    models.Index(fields=['hpb_salon_id']),
-]
-
 # blog_posts テーブル
 indexes = [
     models.Index(fields=['user', '-created_at']),  # ユーザーの投稿一覧
@@ -701,50 +485,20 @@ posts_with_logs = BlogPost.objects.filter(
 from django.core.exceptions import ValidationError
 
 class BlogPost(models.Model):
-    # ...
-
     def clean(self):
         """バリデーション"""
         # タイトルは25文字以内
         if len(self.title) > 25:
-            raise ValidationError({'title': 'タイトルは25文字以内にしてください'})
+            raise ValidationError({'title': 'Title must be 25 characters or less'})
 
-        # 本文は必須
-        if not self.body:
-            raise ValidationError({'body': '本文は必須です'})
-
-        # 処理中は1ユーザー1件まで
-        if self.status == 'processing':
-            existing = BlogPost.objects.filter(
-                user=self.user,
-                status='processing'
-            ).exclude(pk=self.pk).exists()
-
-            if existing:
-                raise ValidationError('すでに処理中の投稿があります')
-```
-
-### 8.2 データベースレベル制約
-
-```sql
--- blog_images の順序は0以上
-ALTER TABLE blog_images ADD CONSTRAINT check_order_non_negative
-CHECK (order >= 0);
-
--- post_logs の処理時間は0以上
-ALTER TABLE post_logs ADD CONSTRAINT check_duration_non_negative
-CHECK (duration_seconds >= 0);
-
--- blog_posts のタイトルは空文字列不可
-ALTER TABLE blog_posts ADD CONSTRAINT check_title_not_empty
-CHECK (length(title) > 0);
+        # 本文は必須（draft/generating以外）
+        if self.status not in ['draft', 'generating'] and not self.content:
+            raise ValidationError({'content': 'Content is required'})
 ```
 
 ---
 
 ## 9. データ保持ポリシー
-
-### 9.1 削除ポリシー
 
 | テーブル | 保持期間 | 削除方法 |
 |---------|---------|---------|
@@ -754,158 +508,48 @@ CHECK (length(title) > 0);
 | post_logs | 6ヶ月 | 定期バッチ削除 |
 | celery results | 7日 | Celeryの自動クリーンアップ |
 
-### 9.2 定期クリーンアップタスク
+### 9.1 定期クリーンアップタスク
 
 ```python
 # apps/blog/tasks.py
-from celery import shared_task
-from datetime import timedelta
-from django.utils import timezone
-
 @shared_task
 def cleanup_old_logs():
-    """
-    6ヶ月以上前のログを削除
-    """
+    """6ヶ月以上前のログを削除"""
+    from datetime import timedelta
     cutoff_date = timezone.now() - timedelta(days=180)
-    deleted_count, _ = PostLog.objects.filter(
+    deleted_count = PostLog.objects.filter(
         completed_at__lt=cutoff_date
-    ).delete()
-
-    logger.info(f"Deleted {deleted_count} old logs")
+    ).delete()[0]
     return deleted_count
-
-@shared_task
-def cleanup_orphan_images():
-    """
-    関連投稿がない画像ファイルを削除
-    """
-    from pathlib import Path
-    import os
-
-    media_root = Path(settings.MEDIA_ROOT) / 'blog_images'
-    deleted_files = []
-
-    for image_file in media_root.rglob('*'):
-        if image_file.is_file():
-            relative_path = str(image_file.relative_to(settings.MEDIA_ROOT))
-            if not BlogImage.objects.filter(image_file=relative_path).exists():
-                os.remove(image_file)
-                deleted_files.append(str(image_file))
-
-    logger.info(f"Deleted {len(deleted_files)} orphan images")
-    return deleted_files
-```
-
-### 9.3 Celery Beat設定
-
-```python
-# config/settings.py
-from celery.schedules import crontab
-
-CELERY_BEAT_SCHEDULE = {
-    'cleanup-old-logs': {
-        'task': 'apps.blog.tasks.cleanup_old_logs',
-        'schedule': crontab(hour=3, minute=0),  # 毎日午前3時
-    },
-    'cleanup-orphan-images': {
-        'task': 'apps.blog.tasks.cleanup_orphan_images',
-        'schedule': crontab(hour=4, minute=0, day_of_week=0),  # 毎週日曜午前4時
-    },
-}
 ```
 
 ---
 
-## 10. バックアップ戦略
+## 10. セキュリティ考慮事項
 
-### 10.1 PostgreSQLバックアップ
-
-```bash
-# 日次フルバックアップ
-pg_dump -U blog_automation_user -d blog_automation_db -F c -f backup_$(date +%Y%m%d).dump
-
-# リストア
-pg_restore -U blog_automation_user -d blog_automation_db -c backup_20250120.dump
-```
-
-### 10.2 メディアファイルバックアップ
-
-```bash
-# rsyncでバックアップ
-rsync -avz --delete /app/media/ /backup/media/
-
-# または tar.gz圧縮
-tar -czf media_backup_$(date +%Y%m%d).tar.gz /app/media/
-```
-
----
-
-## 11. パフォーマンスモニタリング
-
-### 11.1 スロークエリ検出
+### 10.1 暗号化フィールド
 
 ```python
-# config/settings.py
-if DEBUG:
-    LOGGING['loggers']['django.db.backends'] = {
-        'level': 'DEBUG',
-        'handlers': ['console'],
-    }
+# apps/blog/models.py
+class SALONBoardAccount(models.Model):
+    def set_password(self, password: str):
+        from cryptography.fernet import Fernet
+        fernet = Fernet(settings.ENCRYPTION_KEY.encode())
+        self.encrypted_password = fernet.encrypt(password.encode()).decode()
+
+    def get_credentials(self) -> tuple:
+        from cryptography.fernet import Fernet
+        fernet = Fernet(settings.ENCRYPTION_KEY.encode())
+        password = fernet.decrypt(self.encrypted_password.encode()).decode()
+        return self.login_id, password
 ```
 
-### 11.2 django-debug-toolbarの使用
-
-```python
-# config/settings.py (開発環境のみ)
-if DEBUG:
-    INSTALLED_APPS += ['debug_toolbar']
-    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
-    INTERNAL_IPS = ['127.0.0.1']
-```
-
----
-
-## 12. セキュリティ考慮事項
-
-### 12.1 暗号化フィールド
-
-```python
-# apps/accounts/utils.py
-from cryptography.fernet import Fernet
-from django.conf import settings
-
-def get_fernet():
-    return Fernet(settings.ENCRYPTION_KEY.encode())
-
-def encrypt_credential(plain_text: str) -> str:
-    if not plain_text:
-        return ""
-    f = get_fernet()
-    return f.encrypt(plain_text.encode()).decode()
-
-def decrypt_credential(encrypted_text: str) -> str:
-    if not encrypted_text:
-        return ""
-    f = get_fernet()
-    return f.decrypt(encrypted_text.encode()).decode()
-```
-
-### 12.2 SQLインジェクション対策
-
+### 10.2 SQLインジェクション対策
 Django ORMを使用することで自動的に対策されます。
 
-```python
-# 安全（パラメータ化クエリ）
-User.objects.filter(username=user_input)
-
-# 危険（生SQLは避ける）
-# User.objects.raw(f"SELECT * FROM users WHERE username = '{user_input}'")
-```
-
 ---
 
-## 13. まとめ
+## 11. まとめ
 
 このデータベース設計により：
 - **正規化**: 適切な正規化でデータ重複を防止
@@ -914,10 +558,8 @@ User.objects.filter(username=user_input)
 - **セキュリティ**: 認証情報の暗号化、SQLインジェクション対策
 - **保守性**: ログ管理とクリーンアップによる肥大化防止
 
-次のステップでは、このスキーマを利用したAPIエンドポイント設計を行います。
-
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年1月
-**ステータス**: 初版完成
+**最終更新**: 2025年11月
+**ステータス**: 実装完了・ドキュメント更新
