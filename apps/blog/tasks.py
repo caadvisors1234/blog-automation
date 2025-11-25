@@ -15,7 +15,15 @@ from celery import shared_task
 from django.utils import timezone
 from .models import BlogPost, PostLog
 from .gemini_client import GeminiClient
-from .salon_board_client import SALONBoardClient
+from .salon_board_client import (
+    SALONBoardClient, 
+    SALONBoardError,
+    LoginError, 
+    RobotDetectionError, 
+    SalonSelectionError,
+    ElementNotFoundError,
+    UploadError
+)
 from .progress import ProgressNotifier
 
 logger = logging.getLogger(__name__)
@@ -132,6 +140,8 @@ def generate_blog_content_task(self, post_id: int):
             notifier.send_progress(80, "生成完了。データベースを更新中...")
 
             # Update post with generated variations
+            # Refresh from database to avoid stale object issues
+            post.refresh_from_db()
             old_status = post.status
             post.generated_variations = result['variations']
             post.ai_generated = True
@@ -252,16 +262,28 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         # Validate content
         if not post.title or not post.content:
             logger.error(f"Post {post_id} missing title or content")
-            post.status = 'failed'
-            post.save(update_fields=['status'])
-            post_log.status = 'failed'
-            post_log.error_message = 'Missing title or content'
-            post_log.completed_at = timezone.now()
-            post_log.calculate_duration()
-            notifier.send_failed(
-                error='Missing title or content',
-                message='タイトルまたは本文がありません'
-            )
+
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+                post_log.status = 'failed'
+                post_log.error_message = 'Missing title or content'
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save(update_fields=['status', 'error_message', 'completed_at', 'duration_seconds'])
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
+
+            # Send notification after database operations
+            try:
+                notifier.send_failed(
+                    error='Missing title or content',
+                    message='タイトルまたは本文がありません'
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
             return {'success': False, 'error': 'Missing title or content'}
 
         notifier.send_progress(10, "認証情報を確認中...")
@@ -273,16 +295,28 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 raise Exception("SALON BOARD account is not active")
         except Exception as e:
             logger.error(f"SALON BOARD account error for post {post_id}: {e}")
-            post.status = 'failed'
-            post.save(update_fields=['status'])
-            post_log.status = 'failed'
-            post_log.error_message = str(e)
-            post_log.completed_at = timezone.now()
-            post_log.calculate_duration()
-            notifier.send_failed(
-                error=str(e),
-                message='SALON BOARDアカウントの認証情報を取得できませんでした'
-            )
+
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+                post_log.status = 'failed'
+                post_log.error_message = str(e)
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save(update_fields=['status', 'error_message', 'completed_at', 'duration_seconds'])
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
+
+            # Send notification after database operations
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='SALON BOARDアカウントの認証情報を取得できませんでした'
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
             return {'success': False, 'error': str(e)}
 
         # Get credentials
@@ -300,14 +334,11 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             with SALONBoardClient() as client:
                 notifier.send_progress(30, "SALON BOARDにログイン中...")
                 
-                # Login
-                login_success = client.login(
+                # Login (raises LoginError or RobotDetectionError on failure)
+                client.login(
                     login_id=login_id,
                     password=password
                 )
-
-                if not login_success:
-                    raise Exception("Failed to login to SALON BOARD")
 
                 notifier.send_progress(50, "ログイン成功。投稿を作成中...")
 
@@ -322,34 +353,38 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 )
 
                 if result['success']:
-                    notifier.send_progress(90, "投稿完了。データベースを更新中...")
-                    
-                    # Update post with publication info
-                    old_status = post.status
-                    post.status = 'published'
-                    post.salon_board_url = result.get('url', '')
-                    post.published_at = timezone.now()
-                    post.save(update_fields=['status', 'salon_board_url', 'published_at'])
+                    # Save to database BEFORE sending notifications
+                    try:
+                        old_status = post.status
+                        post.status = 'published'
+                        post.salon_board_url = result.get('url', '')
+                        post.published_at = timezone.now()
+                        post.save(update_fields=['status', 'salon_board_url', 'published_at'])
 
-                    # Update log
-                    post_log.status = 'success'
-                    post_log.screenshot_path = result.get('screenshot_path', '')
-                    post_log.completed_at = timezone.now()
-                    post_log.calculate_duration()
+                        post_log.status = 'success'
+                        post_log.screenshot_path = result.get('screenshot_path', '')
+                        post_log.completed_at = timezone.now()
+                        post_log.calculate_duration()
+                        post_log.save()
 
-                    notifier.send_status_update(old_status, 'published')
-                    notifier.send_progress(100, "投稿が完了しました")
+                        logger.info(f"Successfully published post {post_id} to SALON BOARD")
+                    except Exception as db_error:
+                        logger.error(f"Failed to save to database: {db_error}")
+                        raise
 
-                    logger.info(f"Successfully published post {post_id} to SALON BOARD")
-
-                    # Send completion notification
-                    notifier.send_completed(
-                        result={
-                            'post_id': post_id,
-                            'url': result.get('url', ''),
-                        },
-                        message='SALON BOARDへの投稿が完了しました'
-                    )
+                    # Send notifications after database operations
+                    try:
+                        notifier.send_status_update(old_status, 'published')
+                        notifier.send_progress(100, "投稿が完了しました")
+                        notifier.send_completed(
+                            result={
+                                'post_id': post_id,
+                                'url': result.get('url', ''),
+                            },
+                            message='SALON BOARDへの投稿が完了しました'
+                        )
+                    except Exception as notif_error:
+                        logger.error(f"Failed to send notification: {notif_error}")
 
                     return {
                         'success': True,
@@ -357,45 +392,151 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                         'url': result.get('url', ''),
                     }
                 else:
-                    raise Exception(result.get('message', 'Publication failed'))
+                    raise SALONBoardError(result.get('message', 'Publication failed'))
 
-        except Exception as e:
-            logger.error(f"SALON BOARD publication failed for post {post_id}: {e}")
-            post.status = 'failed'
-            post.save(update_fields=['status'])
+        except RobotDetectionError as e:
+            # CAPTCHA detected - do not retry (as per system_requirements.md)
+            logger.error(f"CAPTCHA detected for post {post_id}: {e}")
 
-            post_log.status = 'failed'
-            post_log.error_message = str(e)
-            post_log.completed_at = timezone.now()
-            post_log.calculate_duration()
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+                post_log.status = 'failed'
+                post_log.error_message = f"CAPTCHA検知: {str(e)}"
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save()
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
 
-            # Retry task if retries available
-            if self.request.retries < self.max_retries:
-                notifier.send_progress(
-                    0,
-                    f"エラーが発生しました。リトライ中... ({self.request.retries + 1}/{self.max_retries})"
+            # Send notification after database operations
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='CAPTCHA認証が検出されました。手動での対応が必要です。'
                 )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
+            return {'success': False, 'error': str(e), 'post_id': post_id}
+        
+        except LoginError as e:
+            # Login failed - check credentials
+            logger.error(f"Login failed for post {post_id}: {e}")
+
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+                post_log.status = 'failed'
+                post_log.error_message = f"ログイン失敗: {str(e)}"
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save()
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
+
+            # Send notification after database operations
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='SALON BOARDへのログインに失敗しました。認証情報を確認してください。'
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
+            return {'success': False, 'error': str(e), 'post_id': post_id}
+        
+        except SalonSelectionError as e:
+            # Salon not found
+            logger.error(f"Salon selection failed for post {post_id}: {e}")
+
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+                post_log.status = 'failed'
+                post_log.error_message = f"サロン選択エラー: {str(e)}"
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save()
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
+
+            # Send notification after database operations
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='指定されたサロンが見つかりませんでした。'
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
+            return {'success': False, 'error': str(e), 'post_id': post_id}
+
+        except (SALONBoardError, Exception) as e:
+            logger.error(f"SALON BOARD publication failed for post {post_id}: {e}")
+
+            # Save to database BEFORE sending notifications
+            try:
+                post.status = 'failed'
+                post.save(update_fields=['status'])
+
+                post_log.status = 'failed'
+                post_log.error_message = str(e)
+                post_log.completed_at = timezone.now()
+                post_log.calculate_duration()
+                post_log.save()
+            except Exception as db_error:
+                logger.error(f"Failed to save to database: {db_error}")
+
+            # Retry task if retries available (for recoverable errors)
+            if self.request.retries < self.max_retries:
+                try:
+                    notifier.send_progress(
+                        0,
+                        f"エラーが発生しました。リトライ中... ({self.request.retries + 1}/{self.max_retries})"
+                    )
+                except Exception as notif_error:
+                    logger.error(f"Failed to send retry notification: {notif_error}")
                 raise self.retry(exc=e, countdown=120 * (self.request.retries + 1))
 
-            notifier.send_failed(
-                error=str(e),
-                message='SALON BOARDへの投稿に失敗しました',
-                retry_count=self.request.retries
-            )
+            # Send failure notification after database operations
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='SALON BOARDへの投稿に失敗しました',
+                    retry_count=self.request.retries
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send failure notification: {notif_error}")
+
             return {'success': False, 'error': str(e), 'post_id': post_id}
 
     except Exception as e:
         logger.error(f"Unexpected error in publish_to_salon_board_task: {e}")
+
+        # Save post_log in a safe way (avoid async context issues)
         if post_log:
-            post_log.status = 'failed'
-            post_log.error_message = str(e)
-            post_log.completed_at = timezone.now()
-            post_log.save()
+            try:
+                post_log.status = 'failed'
+                post_log.error_message = str(e)
+                post_log.completed_at = timezone.now()
+                post_log.save()
+            except Exception as save_error:
+                logger.error(f"Failed to save post_log: {save_error}")
+
+        # Send notification after database operations
         if notifier:
-            notifier.send_failed(
-                error=str(e),
-                message='予期せぬエラーが発生しました'
-            )
+            try:
+                notifier.send_failed(
+                    error=str(e),
+                    message='予期せぬエラーが発生しました'
+                )
+            except Exception as notif_error:
+                logger.error(f"Failed to send notification: {notif_error}")
+
         return {'success': False, 'error': str(e)}
 
 

@@ -50,3 +50,18 @@ HPB（Hot Pepper Beauty）ブログ自動化システム。AIによるブログ�
   - JSONパース安定化: _extract_json_from_text()メソッド
   - 新ステータス: 'selecting'（記事選択待ち状態）
   - 新フィールド: BlogPost.generated_variations（JSONField）
+- 2025年11月25日: Playwright 自動化バグ修正・エラー処理改善
+  - nicEdit 実装修正:
+    - iframe ではなく contenteditable div を使用
+    - カーソル制御を div.nicEdit-main に対して実行
+    - Range API と Selection API を使用
+  - AsyncSync エラー修正:
+    - progress.py: 同期/非同期コンテキストを検出して適切な送信方法を選択
+    - tasks.py: データベース保存を通知送信より先に実行
+  - PostLog 保存漏れ修正:
+    - 早期バリデーションエラー時も post_log.save() を呼び出し
+    - フィールド名修正: duration → duration_seconds
+  - テスト改善:
+    - 相対パスを使用（Docker/ローカル/CI で実行可能）
+    - select_related() の正しいモック
+    - 全テスト成功: test_async_notification.py, test_nicedit_implementation.py, test_postlog_save.py

@@ -69,44 +69,74 @@ class ProgressNotifier:
     def _send_to_groups(self, event: Dict[str, Any]) -> None:
         """
         Send event to all relevant channel groups.
-        
+
         Args:
             event: Event data to send
         """
         if not self.channel_layer:
             logger.warning("Channel layer not available, skipping notification")
             return
-        
+
         try:
-            # Send to user group
-            async_to_sync(self.channel_layer.group_send)(
-                self.user_group,
-                event
-            )
-            
-            # Send to post-specific group
-            async_to_sync(self.channel_layer.group_send)(
-                self.post_group,
-                event
-            )
+            # Check if we're in an async context
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, use create_task for async sending
+                async def send_async():
+                    try:
+                        await self.channel_layer.group_send(self.user_group, event)
+                        await self.channel_layer.group_send(self.post_group, event)
+                        logger.debug("Notification sent successfully via asyncio.create_task")
+                    except Exception as e:
+                        logger.error(f"Failed to send notification in async task: {e}")
+
+                asyncio.create_task(send_async())
+                logger.debug("Scheduled notification via asyncio.create_task")
+            except RuntimeError:
+                # No running loop, safe to use async_to_sync
+                async_to_sync(self.channel_layer.group_send)(
+                    self.user_group,
+                    event
+                )
+                async_to_sync(self.channel_layer.group_send)(
+                    self.post_group,
+                    event
+                )
         except Exception as e:
             logger.error(f"Failed to send progress notification: {e}")
     
     def _send_to_task_group(self, event: Dict[str, Any]) -> None:
         """
         Send event to task-specific channel group.
-        
+
         Args:
             event: Event data to send
         """
         if not self.channel_layer or not self.task_group:
             return
-        
+
         try:
-            async_to_sync(self.channel_layer.group_send)(
-                self.task_group,
-                event
-            )
+            # Check if we're in an async context
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, use create_task for async sending
+                async def send_async():
+                    try:
+                        await self.channel_layer.group_send(self.task_group, event)
+                        logger.debug("Task notification sent successfully via asyncio.create_task")
+                    except Exception as e:
+                        logger.error(f"Failed to send task notification in async task: {e}")
+
+                asyncio.create_task(send_async())
+                logger.debug("Scheduled task notification via asyncio.create_task")
+            except RuntimeError:
+                # No running loop, safe to use async_to_sync
+                async_to_sync(self.channel_layer.group_send)(
+                    self.task_group,
+                    event
+                )
         except Exception as e:
             logger.error(f"Failed to send task status notification: {e}")
     

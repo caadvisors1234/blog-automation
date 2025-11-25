@@ -1005,34 +1005,52 @@ class SalonBoardAutomation:
 
     def _insert_content_with_images(self, body: str, image_paths: list):
         """
-        本文と画像を交互に挿入（カーソル制御込み）
+        本文と画像を交互に挿入（nicEditor API + contenteditable）
         """
-        # iframeロケータ取得
-        editor_frame = self.page.frame_locator("iframe[id^='nicEdit']")
-        editor_body = editor_frame.locator("body")
+        editor_div = self.page.locator("div.nicEdit-main[contenteditable='true']")
+        editor_div.evaluate("el => el.innerHTML = ''")
 
-        # 本文をプレースホルダーで分割
+        # nicEditor API（textarea#blogContents）を優先的に利用
+        nic_editor_available = self.page.evaluate("""
+            () => {
+                try {
+                    return !!nicEditors.findEditor('blogContents');
+                } catch (e) {
+                    return false;
+                }
+            }
+        """)
+
         import re
         parts = re.split(r'(\{\{image_\d+\}\})', body)
 
         for part in parts:
             if part.startswith('{{image_'):
-                # 画像番号を抽出
                 match = re.match(r'\{\{image_(\d+)\}\}', part)
                 if match:
                     img_num = int(match.group(1)) - 1
                     if img_num < len(image_paths):
-                        self._upload_image(editor_body, image_paths[img_num])
+                        self._upload_image(editor_div, image_paths[img_num])
             else:
-                # テキスト挿入
                 if part.strip():
-                    editor_body.evaluate(f"el => el.innerHTML += '{part}'")
-                    self._move_cursor_to_end(editor_body)
+                    if nic_editor_available:
+                        escaped = part.replace('`', '\\`').replace('${', '\\${')
+                        self.page.evaluate(f"""
+                            () => {{
+                                const editor = nicEditors.findEditor('blogContents');
+                                if (!editor) return;
+                                const current = editor.getContent();
+                                editor.setContent(current + `{escaped}`);
+                            }}
+                        """)
+                    else:
+                        editor_div.evaluate(f"el => el.innerHTML += '{part}'")
+                    self._move_cursor_to_end(editor_div)
 
-    def _upload_image(self, editor_body, image_path: str):
+    def _upload_image(self, editor_div, image_path: str):
         """画像アップロード"""
         # カーソルを末尾へ
-        self._move_cursor_to_end(editor_body)
+        self._move_cursor_to_end(editor_div)
 
         # アップロードボタン
         self.page.click("a#upload")
@@ -1052,10 +1070,10 @@ class SalonBoardAutomation:
         time.sleep(1)
 
         # カーソルを再び末尾へ
-        self._move_cursor_to_end(editor_body)
+        self._move_cursor_to_end(editor_div)
 
     def _move_cursor_to_end(self, editor_body):
-        """カーソルを末尾へ移動"""
+        """カーソルを末尾へ移動（contenteditable div 対象）"""
         js_code = """
         (body) => {
             const doc = body.ownerDocument;

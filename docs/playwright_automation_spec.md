@@ -56,8 +56,9 @@ salon_board:
     title: "input#blogTitle"
 
     # リッチエディタ (nicEdit)
-    editor_iframe: "iframe[id^='nicEdit']"
-    # 操作対象は iframe.contentDocument.body
+    # 注意: nicEdit は iframe を使用せず、contenteditable div を使用します
+    editor_div: "div.nicEdit-main[contenteditable='true']"  # 実際に表示される編集領域（カーソル制御対象）
+    editor_textarea: "textarea#blogContents"  # nicEditor API がバインドされる hidden textarea（nicEditors.findEditor('blogContents')で取得）
 
     # 画像アップロード
     image:
@@ -126,61 +127,49 @@ salon_board:
 
 ### 3.4 本文入力と画像挿入（カーソル制御必須）
 
-nicEditは `iframe` 内の `body` を編集する。画像アップロード時、フォーカス位置に画像が挿入されるため、**明示的なカーソル移動**が必要である。
-すべての操作は **iframeのコンテキスト内** で実行し、`window` や `document` オブジェクトも iframe 内のものを参照する必要がある。
+SALON BOARD の nicEdit は contenteditable な `<div class="nicEdit-main">` を直接描画し、元の `<textarea id="blogContents">` には nicEditor の API がバインドされている。画像アップロード時は**キャレット位置**に画像が挿入されるため、常に末尾へカーソルを移動させながら処理を進める必要がある。
+
+**重要**: nicEdit は iframe を使用しません。編集領域は `div.nicEdit-main[contenteditable='true']` であり、カーソル制御はこの要素に対して行います。
+
+実装ポリシーは以下の 3 層構造とする。
+
+1. **nicEditor API**: `nicEditors.findEditor('blogContents')` でエディタインスタンスを取得し、`setContent` / `getContent` を使って HTML を結合する。
+2. **contenteditable div 操作**: `.nicEdit-main` (Selectors.FORM['editor_div']) に対して `evaluate()` で `innerHTML` を更新し、Range API でカーソルを制御する。
+3. **テキストエリアへのフォールバック**: どうしても nicEdit を操作できない場合は `textarea#blogContents` などの従来フォームに直接書き込み、画像は順番にアップロードする。
 
 **処理フロー:**
 本文データを分割し、`[テキストブロックA, 画像1, テキストブロックB...]` の順で処理する。
 
 ### ステップごとの操作:
 
-1. **iframe ロケータの取得**:
+1. **nicEditor API で初期化**:
     
     ```python
-    # iframeを特定
-    editor_frame = page.frame_locator("iframe[id^='nicEdit']")
-    # iframe内のbodyを特定
-    editor_body = editor_frame.locator("body")
-    
+    editor = nicEditors.findEditor('blogContents')
+    editor.setContent('')  # 既存内容を初期化
     ```
     
-2. **テキスト追記 (iframe内で実行)**:
-    - `editor_body` に対する `evaluate` は、自動的にiframeコンテキスト内で実行される。
-    
-    ```python
-    text_content = "追記したいテキスト<br>"
-    # el は iframe内の body 要素を指す
-    editor_body.evaluate(f"el => el.innerHTML += '{text_content}'")
-    
-    ```
-    
-3. **カーソルを末尾へ移動 (iframe内で実行)**:
-    - 画像アップロードボタンを押す**前**に、カーソルが文頭や意図しない位置にないことを保証する。
-    - 以下のJavaScriptロジックをPython変数として定義し、実行する。
-    - **重要**: `body.ownerDocument` を経由して、確実にiframe内の `document` と `window` を取得する。
-    
-    ```python
-    js_move_cursor = """
-    (body) => {
-        const doc = body.ownerDocument;
-        const win = doc.defaultView || doc.parentWindow;
-    
-        body.focus();
-        const range = doc.createRange();
-        const selection = win.getSelection();
-    
-        range.selectNodeContents(body);
-        range.collapse(false); // false = 末尾
-    
+    - API が取得できなければ手順 2 にフォールバックする。
+
+2. **テキスト追記**:
+    - API 使用時は `editor.getContent()` と連結して `setContent()`。
+    - API が無い/失敗する場合は `page.locator(Selectors.FORM['editor_div']).evaluate(...)` で `innerHTML` を加算する。
+
+3. **カーソルを末尾へ移動**:
+    - **重要**: カーソル制御は `.nicEdit-main` contenteditable div に対して行います（textarea ではありません）。
+    - Range API と Selection API を使用してカーソルを末尾に移動:
+        ```javascript
+        var editor = document.querySelector("div.nicEdit-main[contenteditable='true']");
+        var range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false); // false = 末尾に移動
+        var selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range);
-    }
-    """
-    # iframe内のbodyに対して実行
-    editor_body.evaluate(js_move_cursor)
-    
-    ```
-    
+        editor.focus();
+        ```
+    - 画像アップロード前後に必ずカーソル制御を実行し、画像が正しい位置に挿入されるようにします。
+
 4. **画像アップロード**:
     - `page.click("a#upload")` (これはメインフレーム上の操作)
     - `page.set_input_files("input#sendFile", file_path)`
@@ -188,13 +177,8 @@ nicEditは `iframe` 内の `body` を編集する。画像アップロード時�
     - `page.click("input.imageUploaderModalSubmitButton.isActive")`
     - モーダルが消えるのを待つ (`page.wait_for_selector("div.imageUploaderModal", state="hidden")`)。
 5. **カーソルを末尾へ移動 (再実行)**:
-    - 画像挿入後、フォーカス位置リセット防止のため、再度手順3の `js_move_cursor` を実行する。
-    
-    ```python
-    editor_body.evaluate(js_move_cursor)
-    
-    ```
-    
+    - 画像挿入後、再度 `.nicEdit-main` contenteditable div に対して Range API を使用したカーソル制御を実行し、次ブロックに備える。
+
 6. (次のテキストブロックへ進む)
 
 ### 3.5 完了処理
