@@ -48,6 +48,17 @@
                         {% endfor %}
                     </select>
                 </div>
+                
+                <!-- AI Prompt (Optional) -->
+                <div>
+                    <label for="ai_prompt" class="block text-body font-medium text-gray-700 mb-2">
+                        AIへの追加指示
+                        <span class="text-caption text-gray-400 font-normal ml-1">(任意)</span>
+                    </label>
+                    <textarea id="ai_prompt" name="ai_prompt" rows="3"
+                              placeholder="例: 20代〜30代女性向けに明るく親しみやすい文章で紹介してください。"></textarea>
+                    <p class="text-caption text-gray-400 mt-1.5">空欄の場合、キーワードと画像からAIが最適な記事を自動生成します。</p>
+                </div>
             </div>
         </section>
         

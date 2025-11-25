@@ -28,6 +28,7 @@
 ### apps/blog/views.py
 - **BlogPostViewSet**: 
   - アクション: generate（AI生成開始）, publish（SALON BOARD投稿）, images（画像取得）, stats（ダッシュボード統計）
+- **テンプレートビュー**: `post_create` はキーワード必須（空の場合はエラーを返し、タイトル/AI指示欄は存在しない）
 - **BlogImageViewSet**: 画像CRUD
 - **PostLogViewSet**: 投稿ログ読み取り専用
 
@@ -35,8 +36,13 @@
 - **BlogPostCreateSerializer.create()**: 
   - userはViewSet.perform_create()からvalidated_dataに渡される
   - create()内で直接userを取得しない（二重設定バグ防止済み）
+  - `validate_keywords()` で空入力を弾き、トリムした文字列を保存
 
 ### apps/blog/tasks.py
+- **generate_blog_content_task**: 
+  - キーワード必須（欠落時は即 failed）
+  - ユーザー提供の `ai_prompt` があれば優先使用し、なければキーワード/トーンから定型プロンプトを自動生成
+  - 画像枚数に応じて `{{image_n}}` プレースホルダーの挿入指示を付与
 - **generate_blog_content_task**: AI生成Celeryタスク（max_retries=3, リトライ間隔60秒×）
 - **publish_to_salon_board_task**: SALON BOARD投稿タスク（max_retries=3, リトライ間隔120秒×）
 - **cleanup_old_failed_posts**: 古い失敗投稿クリーンアップ

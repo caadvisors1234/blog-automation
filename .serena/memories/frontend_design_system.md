@@ -51,6 +51,15 @@ templates/
     ├── 404.html, 500.html, 503.html
 ```
 
+## 記事作成フォーム (2025-11-25 更新)
+`templates/blog/create.html` の構成:
+- **キーワード**（必須）: カンマ区切りで複数指定
+- **トーン**: フレンドリー/プロフェッショナル/カジュアル/フォーマル
+- **AIへの追加指示**（任意）: ユーザーが詳細な指示を追加可能、空欄時は自動生成
+- **画像**: 最大4枚、`<label for="image-input">` ベースで確実にダイアログ表示
+- **SALON BOARD設定**: スタイリスト/クーポン（HPB自動取得または手動入力）
+- タイトル入力欄は削除（AIが自動生成）
+
 ## JavaScript
-- `static/js/main.js`: 画像プレビュー、フォームバリデーション、API呼び出し
+- `static/js/main.js`: ImagePreviewクラス（labelベース）、フォームバリデーション、API呼び出し
 - `static/js/websocket.js`: WebSocket接続、進捗更新、トースト通知
