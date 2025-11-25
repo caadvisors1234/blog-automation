@@ -15,6 +15,7 @@ class BlogPost(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('generating', 'AI Generating'),
+        ('selecting', 'Selecting Article'),  # User is selecting from AI variations
         ('ready', 'Ready to Publish'),
         ('publishing', 'Publishing'),
         ('published', 'Published'),
@@ -30,10 +31,14 @@ class BlogPost(models.Model):
     )
     title = models.CharField(
         max_length=25,
+        blank=True,
+        default='',
         verbose_name='Title',
         help_text='Blog title (max 25 characters)'
     )
     content = models.TextField(
+        blank=True,
+        default='',
         verbose_name='Content',
         help_text='Final content with image placeholders'
     )
@@ -41,6 +46,12 @@ class BlogPost(models.Model):
         blank=True,
         verbose_name='Generated Content',
         help_text='AI-generated original content (backup)'
+    )
+    generated_variations = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Generated Variations',
+        help_text='AI-generated article variations for selection'
     )
     status = models.CharField(
         max_length=20,
@@ -133,11 +144,11 @@ class BlogPost(models.Model):
     def clean(self):
         """Validate model data"""
         # Title length validation
-        if len(self.title) > 25:
+        if self.title and len(self.title) > 25:
             raise ValidationError({'title': 'Title must be 25 characters or less'})
 
         # Content is required for non-draft posts
-        if self.status not in ['draft', 'generating'] and not self.content:
+        if self.status not in ['draft', 'generating', 'selecting'] and not self.content:
             raise ValidationError({'content': 'Content is required'})
 
     def get_image_count(self) -> int:

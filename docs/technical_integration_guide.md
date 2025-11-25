@@ -56,88 +56,180 @@ client = genai.Client()
 client = genai.Client(api_key='your-api-key')
 ```
 
-### 2.3 ブログ記事生成の実装
+### 2.3 ブログ記事生成の実装（3案生成対応）
 
-#### 基本的なテキスト生成
+現在の実装では、AIが3つの異なる記事バリエーションを生成し、ユーザーが選択できるようになっています。
+
+#### 3案生成メソッド
 ```python
+# apps/blog/gemini_client.py
 from google import genai
 from google.genai import types
+import json
+import re
 
-def generate_blog_content(
-    keywords: str,
-    tone: str,
-    image_count: int
-) -> dict:
-    """
-    ブログ記事のタイトルと本文を生成する
+class GeminiClient:
+    def __init__(self):
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self.model_id = 'gemini-2.5-flash'
 
-    Args:
-        keywords: 記事のキーワード
-        tone: トーン＆マナー
-        image_count: アップロードされた画像の枚数
+    def generate_blog_content_variations(
+        self,
+        prompt: str,
+        num_variations: int = 3,
+        image_count: int = 0,
+        temperature: float = 0.9,
+        max_output_tokens: int = 8192,
+    ) -> dict:
+        """
+        3種類の異なる記事バリエーションを生成
 
-    Returns:
-        dict: {"title": str, "body": str}
-    """
-    client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+        Args:
+            prompt: ユーザーからのリクエスト
+            num_variations: 生成するバリエーション数（デフォルト3）
+            image_count: 画像の枚数（プレースホルダー挿入用）
+            temperature: 創造性レベル（0.0-1.0）
+            max_output_tokens: 最大出力トークン数
 
-    # プロンプトの構築
-    prompt = f"""
-あなたは美容室のプロのブログライターです。以下の条件で魅力的なブログ記事を作成してください：
+        Returns:
+            dict: {"variations": [{"id": 1, "title": "...", "content": "..."}, ...]}
+        """
+        # 画像プレースホルダー指示を構築
+        image_instruction = ""
+        if image_count > 0:
+            placeholder_list = ', '.join([f'{{{{image_{i}}}}}' for i in range(1, image_count + 1)])
+            image_instruction = f"""
 
-【条件】
-- キーワード: {keywords}
-- トーン: {tone}
-- タイトル: 25文字以内（厳守）
-- 本文: HTMLタグ込みで800文字程度（最大1000文字まで）
-- 画像プレースホルダー: 本文中に{{{{image_1}}}}, {{{{image_2}}}}...を{image_count}個まで適切な位置に配置してください
+【画像プレースホルダー - 必須】
+この記事には{image_count}枚の画像が添付されています。
+本文中に以下の{image_count}個のプレースホルダーを【必ず全て】配置してください：
+{placeholder_list}
 
-【出力形式】
-TITLE: [ここにタイトル]
-BODY: [ここに本文]
-"""
+配置ルール：
+- 全てのプレースホルダーを必ず使用すること（省略厳禁）
+- 記事の流れに合った適切な位置に配置する
+- プレースホルダーは単独の行に配置する"""
 
-    # API呼び出し
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.8,  # 創造性を高める
-            max_output_tokens=2000,
-            top_p=0.95,
+        system_instruction = f"""あなたは美容サロンのブログライターです。
+{num_variations}種類の異なる魅力的なブログ記事を作成してください。
+
+各記事の要件：
+- タイトルは25文字以内
+- 本文は600-800文字程度
+- 3つの記事はそれぞれ異なる切り口で書く{image_instruction}
+
+出力形式：必ずJSON形式で返してください
+{{
+  "variations": [
+    {{"title": "...", "content": "..."}},
+    ...
+  ]
+}}"""
+
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                response_mime_type="application/json",
+                system_instruction=system_instruction,
+            )
         )
-    )
 
-    # レスポンスのパース
-    text = response.text
-    title = extract_title(text)
-    body = extract_body(text)
+        # JSONパースとバリデーション
+        result = self._extract_json_from_text(response.text)
+        variations = []
+        
+        for i, var in enumerate(result.get('variations', [])[:num_variations]):
+            content = self._clean_content(var.get('content', ''))
+            
+            # 画像プレースホルダーの保証
+            if image_count > 0:
+                content = self._ensure_image_placeholders(content, image_count)
+            
+            variations.append({
+                'id': i + 1,
+                'title': var.get('title', '')[:25],
+                'content': content,
+            })
 
-    return {
-        "title": title,
-        "body": body,
-        "usage": response.usage_metadata.total_token_count
-    }
+        return {'variations': variations, 'success': True}
+```
 
-def extract_title(text: str) -> str:
-    """生成されたテキストからタイトルを抽出"""
-    import re
-    match = re.search(r'TITLE:\s*(.+)', text)
-    if match:
-        return match.group(1).strip()[:25]  # 25文字制限
-    return ""
+#### 画像プレースホルダー保証機能
+```python
+def _ensure_image_placeholders(self, content: str, image_count: int) -> str:
+    """
+    画像プレースホルダーが確実に含まれることを保証
 
-def extract_body(text: str) -> str:
-    """生成されたテキストから本文を抽出"""
-    import re
-    match = re.search(r'BODY:\s*(.+)', text, re.DOTALL)
-    if match:
-        body = match.group(1).strip()
-        # HTMLタグを含めて1000文字以内に制限
-        if len(body) > 1000:
-            body = body[:1000]
-        return body
-    return ""
+    AIが一部のプレースホルダーを省略した場合でも、
+    この後処理で不足分を補完する。
+    """
+    if image_count <= 0:
+        return content
+
+    # 既存のプレースホルダーを検出
+    existing = set()
+    for i in range(1, image_count + 1):
+        patterns = [f'{{{{image_{i}}}}}', f'{{image_{i}}}', f'[[image_{i}]]']
+        if any(p in content for p in patterns):
+            existing.add(i)
+
+    # 不足分を検出
+    missing = [i for i in range(1, image_count + 1) if i not in existing]
+
+    if not missing:
+        return content
+
+    # 段落間に均等配置
+    paragraphs = content.split('\n\n')
+    for idx, img_num in enumerate(missing):
+        insert_pos = min(
+            (idx + 1) * len(paragraphs) // (len(missing) + 1),
+            len(paragraphs) - 1
+        )
+        paragraphs[insert_pos] += f'\n\n{{{{image_{img_num}}}}}'
+
+    return '\n\n'.join(paragraphs)
+```
+
+#### JSON抽出ヘルパー（堅牢なパース）
+```python
+def _extract_json_from_text(self, text: str) -> dict:
+    """
+    様々な形式のAI出力からJSONを抽出
+
+    対応形式:
+    - 純粋なJSON
+    - Markdownコードブロック内のJSON
+    - 前後に説明文があるJSON
+    """
+    if not text:
+        return {}
+
+    # 直接パースを試行
+    try:
+        return json.loads(text.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Markdownコードブロックから抽出
+    patterns = [
+        r'```json\s*([\s\S]*?)\s*```',
+        r'```\s*([\s\S]*?)\s*```',
+        r'\{[\s\S]*\}',
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        for match in matches:
+            try:
+                return json.loads(match)
+            except json.JSONDecodeError:
+                continue
+
+    return {}
 ```
 
 #### エラーハンドリング
@@ -1212,73 +1304,115 @@ def send_error(user_id: int, task_id: str, error: str, message: str = ''):
     )
 
 @shared_task(bind=True, max_retries=3)
-def auto_post_blog_task(
-    self,
-    user_id: int,
-    title: str,
-    body: str,
-    image_paths: list,
-    stylist_id: str,
-    coupon_name: str
-):
+def generate_blog_content_task(self, post_id: int):
     """
-    ブログ自動投稿タスク（進捗通知付き）
+    AI記事3案生成タスク
+
+    生成完了後、BlogPostのステータスを'selecting'に変更し、
+    ユーザーが3案から選択する画面へ誘導する。
     """
     task_id = self.request.id
 
     try:
+        from apps.blog.models import BlogPost
+        from apps.blog.gemini_client import GeminiClient
+
+        post = BlogPost.objects.get(id=post_id)
+        user_id = post.user_id
+
         # 1. タスク開始通知
-        send_progress(user_id, task_id, 'started', 10, 'タスクを開始しました')
+        send_progress(user_id, task_id, 'started', 10, 'AI記事生成を開始しました')
 
-        # 2. スクレイピング開始
-        send_progress(user_id, task_id, 'scraping', 20, 'スタイリスト情報を取得中...')
+        # 2. プロンプト構築
+        gemini_client = GeminiClient()
+        image_count = post.images.count()
 
-        from apps.blog.scraper import scrape_stylists, scrape_coupons
-        from apps.accounts.models import User
+        full_prompt = f"""キーワード: {post.keywords}
+トーン: {post.tone or 'friendly'}"""
 
-        user = User.objects.get(id=user_id)
-        stylists = scrape_stylists(user.hpb_salon_url)
+        # 3. AI生成（3案）
+        send_progress(user_id, task_id, 'generating', 30, 'AIが3つの記事案を生成中...')
+        
+        result = gemini_client.generate_blog_content_variations(
+            prompt=full_prompt,
+            num_variations=3,
+            image_count=image_count,
+        )
 
-        send_progress(user_id, task_id, 'scraping', 30, 'クーポン情報を取得中...')
-        coupons = scrape_coupons(user.hpb_salon_url)
+        # 4. 結果保存
+        send_progress(user_id, task_id, 'saving', 80, '生成完了。データベースを更新中...')
+        
+        post.generated_variations = result['variations']
+        post.ai_generated = True
+        post.status = 'selecting'  # ユーザーが選択する状態へ
+        post.save()
 
-        # 3. 自動投稿開始
-        send_progress(user_id, task_id, 'posting', 50, 'ブログ投稿を開始しています...')
-
-        from playwright.sync_api import sync_playwright
-        from apps.blog.automation import SalonBoardAutomation
-        from apps.accounts.utils import decrypt_credential
-
-        login_id = decrypt_credential(user.salonboard_user_id)
-        password = decrypt_credential(user.salonboard_password)
-
-        with sync_playwright() as p:
-            automation = SalonBoardAutomation(p, login_id, password)
-
-            # ログイン
-            send_progress(user_id, task_id, 'posting', 60, 'ログイン中...')
-
-            result = automation.post_blog(
-                salon_id=user.hpb_salon_id,
-                title=title,
-                body=body,
-                image_paths=image_paths,
-                stylist_id=stylist_id,
-                coupon_name=coupon_name
-            )
-
-        # 4. 完了通知
+        # 5. 完了通知
         send_progress(
             user_id,
             task_id,
             'completed',
             100,
-            'ブログ投稿が完了しました！',
-            {
-                'screenshot_path': result.get('screenshot_path'),
-                'title': title
-            }
+            '3つの記事案が生成されました。選択画面に移動します。',
+            {'redirect_url': f'/blog/posts/{post_id}/select/'}
         )
+
+        return {
+            'success': True,
+            'post_id': post_id,
+            'variation_count': len(result['variations']),
+        }
+
+    except Exception as exc:
+        logger.error(f"Task failed: {exc}")
+        send_error(user_id, task_id, str(exc), 'AI生成中にエラーが発生しました')
+        raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(bind=True, max_retries=3)
+def publish_to_salon_board_task(self, post_id: int):
+    """
+    SALON BOARDへの自動投稿タスク
+    """
+    task_id = self.request.id
+
+    try:
+        from apps.blog.models import BlogPost
+        from apps.accounts.models import User
+        from playwright.sync_api import sync_playwright
+        from apps.blog.salon_board_client import SalonBoardClient
+
+        post = BlogPost.objects.get(id=post_id)
+        user = post.user
+        user_id = user.id
+
+        # 1. タスク開始通知
+        send_progress(user_id, task_id, 'started', 10, '投稿処理を開始しました')
+
+        # 2. 認証情報取得
+        from apps.accounts.utils import decrypt_credential
+        sb_account = user.salon_board_account
+        login_id, password = sb_account.get_credentials()
+
+        # 3. 自動投稿開始
+        send_progress(user_id, task_id, 'posting', 50, 'SALON BOARDにログイン中...')
+
+        with sync_playwright() as p:
+            client = SalonBoardClient(p, login_id, password)
+            
+            send_progress(user_id, task_id, 'posting', 70, 'ブログを投稿中...')
+
+            result = client.post_blog(
+                salon_id=user.hpb_salon_id,
+                title=post.title,
+                body=post.content,
+                image_paths=[img.image_file.path for img in post.images.all()],
+                stylist_id=post.stylist_id,
+                coupon_name=post.coupon_name
+            )
+
+        # 4. 完了通知
+        send_progress(user_id, task_id, 'completed', 100, '投稿が完了しました！')
 
         return {
             'status': 'success',
@@ -1588,5 +1722,5 @@ celery -A config flower --port=5555
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年11月（Userモデル更新、SALON BOARDアカウント分離）
-**ステータス**: 初版完成
+**最終更新**: 2025年11月
+**ステータス**: AI3案生成、画像プレースホルダー保証機能対応

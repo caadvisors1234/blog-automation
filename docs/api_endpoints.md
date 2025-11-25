@@ -155,7 +155,7 @@ SALON BOARDアカウントを削除
 **クエリパラメータ**:
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
-| status | string | ステータスでフィルタ（draft, generating, ready, publishing, published, failed） |
+| status | string | ステータスでフィルタ（draft, generating, selecting, ready, publishing, published, failed） |
 | ai_generated | boolean | AI生成フラグでフィルタ |
 | search | string | タイトル・本文で検索 |
 | page | integer | ページ番号 |
@@ -288,11 +288,23 @@ images[]: (File) image2.jpg
 | 現在のステータス | 遷移可能なステータス |
 |----------------|-------------------|
 | draft | generating, ready, failed |
-| generating | ready, failed, draft |
+| generating | selecting, failed, draft |
+| selecting | ready, failed, draft |
 | ready | publishing, draft |
 | publishing | published, failed |
 | published | （変更不可） |
 | failed | draft, generating |
+
+**ステータス一覧**:
+| ステータス | 説明 |
+|-----------|------|
+| draft | 下書き状態 |
+| generating | AI記事生成中 |
+| selecting | AI生成完了、ユーザーが3案から選択中 |
+| ready | 投稿準備完了 |
+| publishing | SALON BOARDへ投稿中 |
+| published | 投稿完了 |
+| failed | エラー発生 |
 
 ---
 
@@ -306,11 +318,16 @@ images[]: (File) image2.jpg
 
 ### 4.6 POST /api/blog/posts/{id}/generate/
 
-AI記事生成を開始
+AI記事生成を開始（3案生成）
 
 **前提条件**:
 - ステータスが`draft`または`failed`
 - `ai_prompt`または`keywords`が設定されている
+
+**処理内容**:
+- AIが3つの記事バリエーションを生成
+- 生成完了後、ステータスが`selecting`に変更
+- ユーザーが3案から1つを選択する画面へ遷移
 
 **レスポンス**:
 ```json
@@ -328,6 +345,48 @@ AI記事生成を開始
   "detail": "Post must be in draft or failed status to generate"
 }
 ```
+
+---
+
+### 4.6.1 GET /blog/posts/{id}/generating/
+
+AI生成中の進捗表示画面（テンプレートビュー）
+
+**説明**:
+- WebSocketで生成進捗をリアルタイム表示
+- 生成完了後、自動的に記事選択画面へリダイレクト
+
+---
+
+### 4.6.2 GET /blog/posts/{id}/select/
+
+AI生成記事の選択画面（テンプレートビュー）
+
+**前提条件**:
+- ステータスが`selecting`
+
+**説明**:
+- AIが生成した3つの記事案を表示
+- ユーザーが1つを選択して確定
+
+**レスポンス**: HTML（`templates/blog/select_article.html`）
+
+---
+
+### 4.6.3 POST /blog/posts/{id}/select/confirm/
+
+選択した記事を確定
+
+**リクエスト**:
+```
+variation_id: 1  // 選択した記事案のID（1, 2, 3のいずれか）
+```
+
+**処理内容**:
+- 選択されたバリエーションの`title`と`content`を`BlogPost`に保存
+- ステータスを`ready`に変更
+
+**レスポンス**: 記事詳細画面へリダイレクト
 
 ---
 

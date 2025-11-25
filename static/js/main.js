@@ -306,12 +306,14 @@ const blogActions = {
         try {
             // Connect WebSocket to post
             window.blogWS.connect(postId);
-            window.blogWS.showProgress('AI記事生成を開始しています...', 0);
+            window.blogWS.showProgress('AI記事生成を開始しています（3案作成）...', 0);
             
             const result = await api.post(`/blog/posts/${postId}/generate/`);
             
             if (result.task_id) {
                 console.log('Generation task started:', result.task_id);
+                // Redirect to generating page
+                window.location.href = `/blog/posts/${postId}/generating/`;
             }
             
             return result;

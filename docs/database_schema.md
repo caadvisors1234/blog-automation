@@ -158,6 +158,7 @@ class BlogPost(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('generating', 'AI Generating'),
+        ('selecting', 'Selecting Article'),  # ユーザーが3案から選択中
         ('ready', 'Ready to Publish'),
         ('publishing', 'Publishing'),
         ('published', 'Published'),
@@ -169,9 +170,14 @@ class BlogPost(models.Model):
         on_delete=models.CASCADE,
         related_name='blog_posts'
     )
-    title = models.CharField(max_length=25)
-    content = models.TextField()
+    title = models.CharField(max_length=25, blank=True, default='')
+    content = models.TextField(blank=True, default='')
     generated_content = models.TextField(blank=True)
+    generated_variations = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='AI-generated article variations for selection'
+    )  # AI生成した3案を保存
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -215,9 +221,10 @@ class BlogPost(models.Model):
 |---------|-----|------|------|
 | id | INTEGER | PRIMARY KEY | 自動採番ID |
 | user_id | INTEGER | FOREIGN KEY | ユーザーID |
-| title | VARCHAR(25) | NOT NULL | タイトル（25文字以内） |
-| content | TEXT | NOT NULL | 本文 |
+| title | VARCHAR(25) | DEFAULT '' | タイトル（25文字以内） |
+| content | TEXT | DEFAULT '' | 本文 |
 | generated_content | TEXT | | AI生成元本文（バックアップ） |
+| generated_variations | JSONB | DEFAULT [] | AI生成した3案のバリエーション |
 | tone | VARCHAR(50) | | トーン |
 | keywords | VARCHAR(200) | | キーワード |
 | ai_prompt | TEXT | | AIプロンプト |
@@ -230,6 +237,27 @@ class BlogPost(models.Model):
 | published_at | TIMESTAMP | NULL可 | 投稿日時 |
 | created_at | TIMESTAMP | | 作成日時 |
 | updated_at | TIMESTAMP | | 更新日時 |
+
+**generated_variations JSONフォーマット**:
+```json
+[
+  {
+    "id": 1,
+    "title": "記事タイトル案1",
+    "content": "記事本文案1（画像プレースホルダー含む）"
+  },
+  {
+    "id": 2,
+    "title": "記事タイトル案2",
+    "content": "記事本文案2（画像プレースホルダー含む）"
+  },
+  {
+    "id": 3,
+    "title": "記事タイトル案3",
+    "content": "記事本文案3（画像プレースホルダー含む）"
+  }
+]
+```
 
 ---
 
@@ -488,11 +516,11 @@ class BlogPost(models.Model):
     def clean(self):
         """バリデーション"""
         # タイトルは25文字以内
-        if len(self.title) > 25:
+        if self.title and len(self.title) > 25:
             raise ValidationError({'title': 'Title must be 25 characters or less'})
 
-        # 本文は必須（draft/generating以外）
-        if self.status not in ['draft', 'generating'] and not self.content:
+        # 本文は必須（draft/generating/selecting以外）
+        if self.status not in ['draft', 'generating', 'selecting'] and not self.content:
             raise ValidationError({'content': 'Content is required'})
 ```
 

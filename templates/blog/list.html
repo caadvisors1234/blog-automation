@@ -33,6 +33,7 @@
                     <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
                         {% if value == 'draft' %}下書き
                         {% elif value == 'generating' %}生成中
+                        {% elif value == 'selecting' %}選択待ち
                         {% elif value == 'ready' %}準備完了
                         {% elif value == 'publishing' %}投稿中
                         {% elif value == 'published' %}公開済み
@@ -94,6 +95,7 @@
                     <span class="badge badge-{{ post.status }}">
                         {% if post.status == 'draft' %}下書き
                         {% elif post.status == 'generating' %}生成中
+                        {% elif post.status == 'selecting' %}選択待ち
                         {% elif post.status == 'ready' %}準備完了
                         {% elif post.status == 'publishing' %}投稿中
                         {% elif post.status == 'published' %}公開済み

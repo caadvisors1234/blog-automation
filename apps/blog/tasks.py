@@ -24,20 +24,21 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3)
 def generate_blog_content_task(self, post_id: int):
     """
-    Celery task to generate blog content using Gemini AI.
+    Celery task to generate 3 blog content variations using Gemini AI.
     
     Sends real-time progress updates via WebSocket.
+    Generates 3 article variations for user selection.
 
     Args:
         post_id: BlogPost ID
 
     Returns:
-        Dictionary with generation result
+        Dictionary with generation result including 3 variations
     """
     notifier = None
     
     try:
-        logger.info(f"Starting AI content generation for post {post_id}")
+        logger.info(f"Starting AI content generation (3 variations) for post {post_id}")
 
         # Get blog post
         try:
@@ -55,7 +56,7 @@ def generate_blog_content_task(self, post_id: int):
         )
         
         # Send task started notification
-        notifier.send_started("AI記事生成を開始しました")
+        notifier.send_started("AI記事生成を開始しました（3案作成中）")
         notifier.send_progress(5, "準備中...")
 
         # Validate post status
@@ -118,50 +119,46 @@ def generate_blog_content_task(self, post_id: int):
 
         notifier.send_progress(20, "Gemini AIに送信中...")
 
-        # Generate content
+        # Generate 3 content variations
         try:
-            notifier.send_progress(30, "AIが記事を生成中... (これには数秒かかります)")
+            notifier.send_progress(30, "AIが3つの記事案を生成中... (これには数秒〜十数秒かかります)")
             
-            result = gemini_client.generate_blog_content(
+            result = gemini_client.generate_blog_content_variations(
                 prompt=full_prompt,
-                title=post.title if post.title else None,
+                num_variations=3,
+                image_count=image_count,
             )
 
             notifier.send_progress(80, "生成完了。データベースを更新中...")
 
-            # Update post with generated content
+            # Update post with generated variations
             old_status = post.status
-            post.title = result['title'][:25]  # Ensure title length
-            post.content = result['content']
-            post.generated_content = result['content']  # Backup
+            post.generated_variations = result['variations']
             post.ai_generated = True
-            post.status = 'ready'
-            post.save(update_fields=['title', 'content', 'generated_content', 'ai_generated', 'status'])
+            post.status = 'selecting'  # User needs to select from variations
+            post.save(update_fields=['generated_variations', 'ai_generated', 'status'])
 
-            notifier.send_status_update(old_status, 'ready')
-            notifier.send_progress(100, "記事生成が完了しました")
+            notifier.send_status_update(old_status, 'selecting')
+            notifier.send_progress(100, "3つの記事案が生成されました。選択画面に移動します。")
 
-            logger.info(f"Successfully generated content for post {post_id}")
+            logger.info(f"Successfully generated 3 content variations for post {post_id}")
 
-            # Send completion notification
+            # Send completion notification with variations info
             notifier.send_completed(
                 result={
                     'post_id': post_id,
-                    'title': result['title'],
+                    'variation_count': len(result['variations']),
                     'model': result.get('model', 'unknown'),
+                    'redirect_url': f'/blog/posts/{post_id}/select/',
                 },
-                message=f"記事「{result['title'][:20]}...」の生成が完了しました"
+                message="3つの記事案が生成されました。お好みの記事を選択してください。"
             )
 
             return {
                 'success': True,
                 'post_id': post_id,
-                'title': result['title'],
+                'variation_count': len(result['variations']),
                 'model': result.get('model', 'unknown'),
-                'tokens': {
-                    'prompt': result.get('prompt_tokens', 0),
-                    'completion': result.get('completion_tokens', 0),
-                }
             }
 
         except Exception as e:

@@ -66,8 +66,12 @@
   - _is_valid_coupon_name(): クーポン名バリデーション
 - 関数: scrape_stylists(), scrape_coupons()（クラスのラッパー）
 
-## データフロー
-1. ユーザーがBlogPost作成（draft状態）
+## データフロー（2025-11-25 更新）
+1. ユーザーが新規作成画面でキーワード入力 → 「AIで記事を生成」ボタン
+2. BlogPost作成（generating状態）→ Celeryタスク即時起動
+3. GeminiClient.generate_blog_content_variations() → 3案生成 → status='selecting'
+4. ユーザーが3案選択画面で好みの記事を選択
+5. 選択した案をtitle/contentに保存 → status='ready'
 2. generate アクション → status='generating' → Celeryタスク起動 → GeminiClient.generate_blog_content() → status='ready'
 3. publish アクション → status='publishing' → Celeryタスク起動 → SALONBoardClient.publish_blog_post() → status='published'
 4. 各ステップでPostLogに記録

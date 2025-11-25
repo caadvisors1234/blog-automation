@@ -44,3 +44,9 @@ HPB（Hot Pepper Beauty）ブログ自動化システム。AIによるブログ�
   - 静的ファイル: custom.css, websocket.js, main.js
   - ビュー: dashboard, login/logout, settings, post CRUD
   - URLルーティング: core, accounts, blog 全て設定済み
+- 2025年11月25日: AI生成機能改善
+  - 3案同時生成: GeminiClient.generate_blog_content_variations()
+  - 選択フロー: generating.html → select_article.html → detail.html
+  - JSONパース安定化: _extract_json_from_text()メソッド
+  - 新ステータス: 'selecting'（記事選択待ち状態）
+  - 新フィールド: BlogPost.generated_variations（JSONField）

@@ -48,8 +48,10 @@ Django Template + Tailwind CSSによるサーバーサイドレンダリング�
 4. ダッシュボード（`/`）
 5. ブログ投稿一覧（`/blog/`）
 6. ブログ新規作成（`/blog/create/`）
-7. ブログ詳細表示（`/blog/{id}/`）
-8. 投稿履歴（`/blog/history/`）
+7. AI生成中画面（`/blog/{id}/generating/`）- 新規
+8. 記事選択画面（`/blog/{id}/select/`）- 新規
+9. ブログ詳細表示（`/blog/{id}/`）
+10. 投稿履歴（`/blog/history/`）
 
 ---
 
@@ -632,6 +634,135 @@ document.getElementById('blog-form').addEventListener('submit', async function(e
 
 ---
 
+### 5.4 AI生成中画面
+
+**パス**: `/blog/{id}/generating/`
+**テンプレート**: `templates/blog/generating.html`
+
+```html
+{% extends "base.html" %}
+
+{% block title %}AI記事生成中 - HPBブログ自動化{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-10 text-center">
+        <h1 class="text-display text-gray-900 mb-4">AI記事生成中</h1>
+        <p class="text-body text-gray-500">3つの記事案を生成しています...</p>
+    </header>
+    
+    <!-- Progress Card -->
+    <div class="card">
+        <div class="flex flex-col items-center py-8">
+            <!-- Spinner -->
+            <div class="relative mb-8">
+                <div class="w-20 h-20 border-4 border-gray-200 rounded-full"></div>
+                <div class="absolute top-0 left-0 w-20 h-20 border-4 border-pink-500 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            
+            <!-- Progress Text -->
+            <div id="progress-container" class="w-full max-w-md">
+                <div class="flex justify-between text-caption text-gray-500 mb-2">
+                    <span id="progress-message">準備中...</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-pink-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+**機能**:
+- WebSocketでリアルタイム進捗表示
+- 生成完了後、記事選択画面へ自動リダイレクト
+- ポーリングによるフォールバック対応
+
+---
+
+### 5.5 記事選択画面
+
+**パス**: `/blog/{id}/select/`
+**テンプレート**: `templates/blog/select_article.html`
+
+```html
+{% extends "base.html" %}
+
+{% block title %}記事を選択 - HPBブログ自動化{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-10">
+        <h1 class="text-display text-gray-900 mb-2">記事を選択</h1>
+        <p class="text-body text-gray-500">AIが生成した3つの記事案から選択してください</p>
+    </header>
+    
+    <!-- Article Variations -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {% for variation in variations %}
+        <div class="card hover:border-pink-300 cursor-pointer article-card" 
+             data-variation-id="{{ variation.id }}">
+            <!-- Header -->
+            <span class="text-caption font-medium text-pink-500">案 {{ variation.id }}</span>
+            
+            <!-- Title -->
+            <h3 class="text-title text-gray-900 mb-3">{{ variation.title }}</h3>
+            
+            <!-- Content Preview -->
+            <div class="text-body text-gray-600 leading-relaxed" style="max-height: 300px; overflow-y: auto;">
+                {{ variation.content|linebreaksbr }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Action Button -->
+    <form method="post" action="{% url 'blog:post_select_confirm' pk=post.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="variation_id" id="selected-variation-id" value="">
+        <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
+            この記事を使う
+        </button>
+    </form>
+</div>
+{% endblock %}
+```
+
+**機能**:
+- 3つの記事案をカード形式で表示
+- クリックで選択状態をトグル
+- 全文プレビューモーダル
+- 選択した記事を確定してready状態へ遷移
+
+**ワイヤーフレーム**:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│    記事を選択                                                     │
+│    AIが生成した3つの記事案から選択してください                        │
+│                                                                  │
+│    ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐│
+│    │ 案 1             │ │ 案 2             │ │ 案 3             ││
+│    │                  │ │                  │ │                  ││
+│    │ タイトル案1       │ │ タイトル案2       │ │ タイトル案3       ││
+│    │                  │ │                  │ │                  ││
+│    │ 本文プレビュー...  │ │ 本文プレビュー...  │ │ 本文プレビュー...  ││
+│    │                  │ │                  │ │                  ││
+│    │ [全文を見る]      │ │ [全文を見る]      │ │ [全文を見る]      ││
+│    └──────────────────┘ └──────────────────┘ └──────────────────┘│
+│                                                                  │
+│    案1を選択中              [やり直す] [この記事を使う]             │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 6. JavaScriptモジュール
 
 ### 6.1 WebSocket処理
@@ -819,5 +950,5 @@ xl: 1280px  /* PC大 */
 ---
 
 **作成日**: 2025年1月
-**最終更新**: 2025年1月
-**ステータス**: 初版完成
+**最終更新**: 2025年11月
+**ステータス**: AI3案生成対応（generating/select画面追加）

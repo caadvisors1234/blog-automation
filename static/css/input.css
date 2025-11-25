@@ -109,6 +109,9 @@
     .badge-generating {
         @apply bg-blue-50 text-blue-700;
     }
+    .badge-selecting {
+        @apply bg-purple-50 text-purple-700;
+    }
     .badge-ready {
         @apply bg-green-50 text-green-700;
     }

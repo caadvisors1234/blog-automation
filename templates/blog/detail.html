@@ -24,6 +24,7 @@
                     <span class="badge badge-{{ post.status }}">
                         {% if post.status == 'draft' %}下書き
                         {% elif post.status == 'generating' %}生成中
+                        {% elif post.status == 'selecting' %}選択待ち
                         {% elif post.status == 'ready' %}準備完了
                         {% elif post.status == 'publishing' %}投稿中
                         {% elif post.status == 'published' %}公開済み
@@ -51,12 +52,40 @@
     </header>
     
     <!-- Actions -->
+    {% if post.status == 'generating' %}
+    <section class="card mb-8 border border-blue-100 bg-blue-50/50">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-body font-medium text-gray-900">AI記事生成中</h3>
+                <p class="text-caption text-gray-500">3つの記事案を生成しています...</p>
+            </div>
+            <a href="{% url 'blog:post_generating' pk=post.pk %}" class="btn btn-secondary">
+                進捗を確認
+            </a>
+        </div>
+    </section>
+    {% endif %}
+    
+    {% if post.status == 'selecting' %}
+    <section class="card mb-8 border border-pink-100 bg-pink-50/50">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-body font-medium text-gray-900">記事を選択してください</h3>
+                <p class="text-caption text-gray-500">AIが生成した3つの記事案から選択できます</p>
+            </div>
+            <a href="{% url 'blog:post_select' pk=post.pk %}" class="btn btn-primary">
+                記事を選択する
+            </a>
+        </div>
+    </section>
+    {% endif %}
+    
     {% if post.status == 'draft' or post.status == 'failed' %}
     <section class="card mb-8 border border-pink-100 bg-pink-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
                 <h3 class="text-body font-medium text-gray-900">AI記事生成</h3>
-                <p class="text-caption text-gray-500">キーワードからAIが記事を自動生成します</p>
+                <p class="text-caption text-gray-500">キーワードからAIが3つの記事案を自動生成します</p>
             </div>
             <button onclick="blogActions.generate({{ post.pk }})" class="btn btn-primary">
                 AI生成を開始

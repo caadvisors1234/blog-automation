@@ -71,7 +71,29 @@ blog-automation/
 │       ├── migrations/
 │       └── tests/
 │
-├── templates/                # Djangoテンプレート（将来用）
+├── templates/                # Djangoテンプレート
+│   ├── base.html             # ベーステンプレート
+│   ├── dashboard.html        # ダッシュボード
+│   ├── accounts/
+│   │   ├── login.html        # ログイン
+│   │   └── settings.html     # ユーザー設定
+│   ├── blog/
+│   │   ├── create.html       # 新規作成
+│   │   ├── generating.html   # AI生成中画面（新規）
+│   │   ├── select_article.html # 記事選択画面（新規）
+│   │   ├── detail.html       # 記事詳細
+│   │   ├── edit.html         # 記事編集
+│   │   ├── list.html         # 記事一覧
+│   │   ├── history.html      # 投稿履歴
+│   │   └── delete_confirm.html # 削除確認
+│   ├── errors/
+│   │   ├── 404.html
+│   │   ├── 500.html
+│   │   └── 503.html
+│   └── includes/
+│       ├── header.html
+│       ├── footer.html
+│       └── messages.html
 │
 ├── static/                   # 静的ファイル
 │

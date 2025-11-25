@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}記事を選択 - HPB Blog Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 lg:px-8 py-10">
+    <!-- Header -->
+    <header class="mb-10">
+        <a href="{% url 'blog:post_list' %}" 
+           class="inline-flex items-center text-body text-gray-500 hover:text-gray-900 transition-colors mb-4">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            記事一覧
+        </a>
+        <h1 class="text-display text-gray-900 mb-2">記事を選択</h1>
+        <p class="text-body text-gray-500">
+            AIが生成した3つの記事案から、お好みのものを選んでください。
+            <span class="text-caption text-gray-400 ml-2">キーワード: {{ post.keywords }}</span>
+        </p>
+    </header>
+    
+    <!-- Images Preview (if any) -->
+    {% if images %}
+    <section class="mb-8">
+        <h2 class="text-title text-gray-900 mb-4">アップロードした画像</h2>
+        <div class="flex flex-wrap gap-3">
+            {% for image in images %}
+            <div class="relative">
+                <img src="{{ image.image_url }}" alt="画像 {{ image.order }}" 
+                     class="w-20 h-20 object-cover rounded-lg border border-gray-200">
+                <div class="absolute -top-1 -left-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
+                    {{ image.order }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-caption text-gray-400 mt-2">
+            本文中の <code class="bg-gray-100 px-1 rounded">{% templatetag openvariable %}image_N{% templatetag closevariable %}</code> に画像が挿入されます
+        </p>
+    </section>
+    {% endif %}
+    
+    <!-- Article Variations -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {% for variation in variations %}
+        <div class="card hover:border-pink-300 transition-colors cursor-pointer article-card" 
+             data-variation-id="{{ variation.id }}"
+             onclick="selectArticle({{ variation.id }})">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-caption font-medium text-pink-500">案 {{ variation.id }}</span>
+                <div class="w-6 h-6 border-2 border-gray-300 rounded-full flex items-center justify-center article-check"
+                     id="check-{{ variation.id }}">
+                    <svg class="w-4 h-4 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- Title -->
+            <h3 class="text-title text-gray-900 mb-3 line-clamp-2">{{ variation.title }}</h3>
+            
+            <!-- Content Preview -->
+            <div class="text-body text-gray-600 leading-relaxed article-content" style="max-height: 300px; overflow-y: auto;">
+                {{ variation.content|linebreaksbr }}
+            </div>
+            
+            <!-- Footer -->
+            <div class="mt-4 pt-4 border-t border-gray-100">
+                <div class="flex justify-between text-caption text-gray-400">
+                    <span>{{ variation.content|length }}文字</span>
+                    <button type="button" 
+                            onclick="event.stopPropagation(); openPreview({{ variation.id }})"
+                            class="text-pink-500 hover:text-pink-700 transition-colors">
+                        全文を見る
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Action Button -->
+    <form method="post" action="{% url 'blog:post_select_confirm' pk=post.pk %}" id="select-form">
+        {% csrf_token %}
+        <input type="hidden" name="variation_id" id="selected-variation-id" value="">
+        
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 py-6 border-t border-gray-200">
+            <div class="text-body text-gray-600">
+                <span id="selection-status" class="text-gray-400">記事を選択してください</span>
+            </div>
+            <div class="flex gap-4">
+                <a href="{% url 'blog:post_create' %}" class="btn btn-secondary">
+                    やり直す
+                </a>
+                <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
+                    この記事を使う
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Full Preview Modal -->
+<div id="preview-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onclick="closePreview()"></div>
+    <div class="absolute inset-4 sm:inset-8 lg:inset-16 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h3 id="preview-title" class="text-title text-gray-900"></h3>
+            <button onclick="closePreview()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Modal Content -->
+        <div class="flex-1 overflow-y-auto px-6 py-6">
+            <div id="preview-content" class="text-body text-gray-700 leading-relaxed whitespace-pre-wrap"></div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div class="flex justify-between items-center">
+                <span id="preview-char-count" class="text-caption text-gray-500"></span>
+                <button onclick="selectArticleFromPreview()" class="btn btn-primary">
+                    この記事を選択
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Store variations data
+    const variations = {{ variations|safe }};
+    let selectedId = null;
+    let previewingId = null;
+    
+    function selectArticle(id) {
+        // Update selection
+        selectedId = id;
+        document.getElementById('selected-variation-id').value = id;
+        
+        // Update UI
+        document.querySelectorAll('.article-card').forEach(card => {
+            const cardId = parseInt(card.dataset.variationId);
+            const check = document.getElementById(`check-${cardId}`);
+            
+            if (cardId === id) {
+                card.classList.add('border-pink-500', 'ring-2', 'ring-pink-200');
+                check.classList.remove('border-gray-300');
+                check.classList.add('bg-pink-500', 'border-pink-500');
+                check.querySelector('svg').classList.remove('hidden');
+            } else {
+                card.classList.remove('border-pink-500', 'ring-2', 'ring-pink-200');
+                check.classList.add('border-gray-300');
+                check.classList.remove('bg-pink-500', 'border-pink-500');
+                check.querySelector('svg').classList.add('hidden');
+            }
+        });
+        
+        // Update status and button
+        const variation = variations.find(v => v.id === id);
+        document.getElementById('selection-status').textContent = `案${id}「${variation.title.substring(0, 15)}...」を選択中`;
+        document.getElementById('selection-status').classList.remove('text-gray-400');
+        document.getElementById('selection-status').classList.add('text-pink-600');
+        document.getElementById('confirm-btn').disabled = false;
+    }
+    
+    function openPreview(id) {
+        previewingId = id;
+        const variation = variations.find(v => v.id === id);
+        
+        document.getElementById('preview-title').textContent = variation.title;
+        document.getElementById('preview-content').textContent = variation.content;
+        document.getElementById('preview-char-count').textContent = `${variation.content.length}文字`;
+        document.getElementById('preview-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closePreview() {
+        document.getElementById('preview-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+        previewingId = null;
+    }
+    
+    function selectArticleFromPreview() {
+        if (previewingId) {
+            selectArticle(previewingId);
+            closePreview();
+        }
+    }
+    
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closePreview();
+        }
+    });
+    
+    // Form validation
+    document.getElementById('select-form').addEventListener('submit', (e) => {
+        if (!selectedId) {
+            e.preventDefault();
+            alert('記事を選択してください');
+        }
+    });
+</script>
+{% endblock %}
+
