@@ -3,7 +3,11 @@
 Blog post management views
 """
 
+import logging
+
 from rest_framework import viewsets, status
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -366,6 +370,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
+from django.urls import reverse
 
 
 @login_required
@@ -449,7 +454,10 @@ def post_create(request):
         
         # Handle image uploads
         images = request.FILES.getlist('images')
+        logger.info(f"Received {len(images)} images for post {post.id}")
+        logger.info(f"request.FILES keys: {list(request.FILES.keys())}")
         for i, image in enumerate(images[:MAX_IMAGES_PER_POST]):
+            logger.info(f"Saving image {i+1}: {image.name}, size={image.size}")
             BlogImage.objects.create(
                 blog_post=post,
                 image_file=image,
@@ -460,6 +468,15 @@ def post_create(request):
         task = generate_blog_content_task.delay(post.id)
         post.celery_task_id = task.id
         post.save(update_fields=['celery_task_id'])
+        
+        # Handle AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'redirect_url': reverse('blog:post_generating', kwargs={'pk': post.pk}),
+                'post_id': post.id,
+                'image_count': post.images.count(),
+            })
         
         messages.info(request, 'AIが3つの記事案を生成中です。少々お待ちください...')
         return redirect('blog:post_generating', pk=post.pk)

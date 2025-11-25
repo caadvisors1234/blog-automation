@@ -167,6 +167,86 @@
             window.imagePreview = new ImagePreview('image-input', 'image-preview-container', 4);
             window.imagePreview.render();
         }
+        
+        // Always use AJAX for form submission to ensure files are properly sent
+        const form = document.querySelector('form');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const files = window.imagePreview.getFiles();
+            console.log('Form submit - files count:', files.length);
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                生成中...
+            `;
+            
+            // Build FormData
+            const formData = new FormData();
+            
+            // Add CSRF token
+            const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+            }
+            
+            // Add form fields
+            formData.append('keywords', form.querySelector('#keywords').value);
+            formData.append('tone', form.querySelector('#tone').value);
+            formData.append('ai_prompt', form.querySelector('#ai_prompt').value || '');
+            formData.append('stylist_id', form.querySelector('#stylist_id')?.value || '');
+            formData.append('coupon_name', form.querySelector('#coupon_name')?.value || '');
+            
+            // Add images explicitly
+            files.forEach(file => {
+                formData.append('images', file);
+                console.log('Added image:', file.name, file.size);
+            });
+            
+            // Send via fetch
+            fetch(form.action || window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Response:', data);
+                if (data.success && data.redirect_url) {
+                    console.log('Redirecting to:', data.redirect_url, 'with', data.image_count, 'images');
+                    window.location.href = data.redirect_url;
+                } else if (data.error) {
+                    alert(data.error);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        AIで記事を生成
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('エラーが発生しました。再度お試しください。');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    AIで記事を生成
+                `;
+            });
+        });
     });
 </script>
 {% endblock %}
