@@ -6,11 +6,9 @@ This module implements browser automation for SALON BOARD (salonboard.com)
 following the specifications defined in docs/playwright_automation_spec.md
 """
 
-import json
 import logging
 import re
 import time
-import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
@@ -743,320 +741,152 @@ class SALONBoardClient:
     # =========================================================================
 
     def _fill_content_with_images(self, content: str, image_paths: List[str]) -> None:
-        """Fill nicEdit editor with text and images while keeping placeholder order."""
+        """
+        nicEdit にテキストと画像をプレースホルダー順で挿入する。
+        1) nicEditor API が使えればそれを優先
+        2) だめなら contenteditable div を直接操作
+        3) それも失敗したら textarea フォールバック
+        """
         try:
-            if self._fill_content_dom(content, image_paths):
-                return
-            logger.warning("[nicedit] DOM-based content fill failed, falling back to textarea method")
-        except UploadError:
-            raise
-        except Exception as fill_error:
-            logger.warning(f"[nicedit] Unexpected error during DOM fill: {fill_error}")
+            # プレースホルダーで分割
+            parts = re.split(r'\{\{image_(\d+)\}\}', content)
 
-        self._fill_content_fallback(content, image_paths)
+            # --- Method 1: nicEditor API ---
+            try:
+                js_script = """
+                (function() {
+                    try {
+                        var editorInstance = nicEditors.findEditor('blogContents');
+                        if (editorInstance) {
+                            editorInstance.setContent('');
+                            return true;
+                        }
+                        return false;
+                    } catch(e) {
+                        console.error('nicEditor API error:', e);
+                        return false;
+                    }
+                })();
+                """
+                result = self.page.evaluate(js_script)
 
-    def _fill_content_dom(self, content: str, image_paths: List[str]) -> bool:
-        """Primary DOM-driven filling strategy with anchor based image placement."""
-        parts = re.split(r'\{\{image_(\d+)\}\}', content)
-        placeholder_count = max((len(parts) - 1) // 2, 0)
-        logger.info(
-            "[nicedit] Preparing content fill: text_segments=%s, placeholders=%s, images=%s",
-            len(parts) - placeholder_count,
-            placeholder_count,
-            len(image_paths),
-        )
+                if result:
+                    for i, part in enumerate(parts):
+                        if i % 2 == 0:
+                            if part.strip():
+                                html_content = part.replace('\\n', '<br>').replace('\\\\', '\\\\\\\\').replace('`', '\\`').replace('${', '\\${')
+                                append_script = f"""
+                                (function() {{
+                                    try {{
+                                        var editorInstance = nicEditors.findEditor('blogContents');
+                                        if (editorInstance) {{
+                                            var currentContent = editorInstance.getContent();
+                                            editorInstance.setContent(currentContent + `{html_content}`);
+                                            return true;
+                                        }}
+                                        return false;
+                                    }} catch(e) {{
+                                        console.error('nicEditor append error:', e);
+                                        return false;
+                                    }}
+                                }})();
+                                """
+                                self.page.evaluate(append_script)
+                        else:
+                            image_index = int(part) - 1
+                            if 0 <= image_index < len(image_paths):
+                                self._set_cursor_at_end_nicedit()
+                                self._upload_single_image(image_paths[image_index])
+                                self._set_cursor_at_end_nicedit()
 
-        editor_div = self.page.locator(Selectors.FORM['editor_div'])
-        if editor_div.count() == 0:
-            logger.warning("[nicedit] Contenteditable editor not found")
-            return False
+                    logger.debug("Content filled using nicEditor API")
+                    return
+                else:
+                    logger.warning("nicEditor API not available, trying fallback methods")
+            except Exception as api_err:
+                logger.warning(f"nicEditor API method failed: {api_err}")
 
-        editor_div.evaluate("el => el.innerHTML = ''")
-        self._mark_existing_editor_images()
+            # --- Method 2: contenteditable 直接操作 ---
+            try:
+                editor_div = self.page.locator(Selectors.FORM['editor_div'])
+                if editor_div.count() > 0:
+                    editor_div.evaluate("el => el.innerHTML = ''")
 
-        for i, part in enumerate(parts):
-            if i % 2 == 0:
-                if part.strip():
-                    logger.info(
-                        "[nicedit-dom] Appending text segment index=%s len=%s preview=%r",
-                        i // 2,
-                        len(part),
-                        part[:30],
-                    )
-                    if not self._append_text_to_editor(part):
-                        raise Exception("Failed to append text segment")
-            else:
-                image_index = int(part) - 1
-                if 0 <= image_index < len(image_paths):
-                    logger.info("[nicedit-dom] Handling image_%s", image_index + 1)
-                    anchor_id = self._generate_anchor_id(image_index + 1)
-                    if not self._create_image_anchor(anchor_id):
-                        raise Exception("Failed to insert image anchor")
+                    for i, part in enumerate(parts):
+                        if i % 2 == 0:
+                            if part.strip():
+                                html_content = part.replace('\\n', '<br>').replace('`', '\\`').replace('${', '\\${')
+                                editor_div.evaluate(f"el => el.innerHTML += `{html_content}`")
+                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
+                        else:
+                            image_index = int(part) - 1
+                            if 0 <= image_index < len(image_paths):
+                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
+                                self._upload_single_image(image_paths[image_index])
+                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
 
-                    cursor_moved = self._set_cursor_at_end_nicedit()
-                    logger.info(
-                        "[nicedit-dom] Cursor move before upload image_%s success=%s",
-                        image_index + 1,
-                        cursor_moved,
-                    )
-                    previous_count = self._get_editor_image_count()
-                    self._upload_single_image(image_paths[image_index])
-                    if not self._wait_for_editor_image_count(previous_count + 1):
-                        raise UploadError(f"Image {image_index + 1} did not appear in editor after upload")
-                    if not self._move_new_image_to_anchor(anchor_id):
-                        raise UploadError(f"Failed to position image {image_index + 1} at anchor")
-                    cursor_moved = self._set_cursor_at_end_nicedit()
-                    logger.info(
-                        "[nicedit-dom] Cursor move after upload image_%s success=%s",
-                        image_index + 1,
-                        cursor_moved,
-                    )
+                    logger.debug("Content filled using contenteditable div")
+                    return
+            except Exception as div_err:
+                logger.warning(f"Contenteditable div method failed: {div_err}")
 
-        logger.info("[nicedit-dom] Content filled using DOM anchoring method")
-        self._sync_nicedit_content()
-        self._log_editor_state("after_fill_dom")
-        return True
+            # --- Method 3: textarea フォールバック ---
+            raise Exception("All primary methods failed, using fallback")
+
+        except Exception as e:
+            logger.warning(f"Error filling content in nicEdit: {e}")
+            self._fill_content_fallback(content, image_paths)
 
     def _upload_single_image(self, image_path: str) -> bool:
         """
-        Upload a single image using SALON BOARD's image uploader
-        (Section 3.4 Step 4 of playwright_automation_spec.md)
-        
-        Steps:
-        1. Click upload button (a#upload)
-        2. Set file input (input#sendFile)
-        3. Wait for thumbnail (img.imageUploaderModalThumbnail)
-        4. Click submit button when active
-        5. Wait for modal to close
-        
-        Args:
-            image_path: Path to the image file
-            
-        Returns:
-            True if upload successful
-            
-        Raises:
-            UploadError: If upload fails
+        SALON BOARD の画像アップローダで単一画像をアップロードする。
+        1) アップロードボタンをクリック
+        2) ファイルをセット
+        3) サムネイル出現を待つ
+        4) 活性化した送信ボタンをクリック
+        5) モーダルクローズを待つ
         """
-        attempts = 2
-        last_error: Optional[Exception] = None
+        try:
+            upload_btn = Selectors.IMAGE['trigger_btn']
+            if self.page.locator(upload_btn).count() == 0:
+                raise UploadError("Upload button not found")
 
-        for attempt in range(1, attempts + 1):
+            self.page.click(upload_btn)
+            self.page.wait_for_timeout(500)
+
+            file_input = Selectors.IMAGE['file_input']
+            if self.page.locator(file_input).count() == 0:
+                raise UploadError("File input not found")
+
+            self.page.set_input_files(file_input, image_path)
+
+            thumbnail = Selectors.IMAGE['thumbnail']
             try:
-                logger.info(f"[upload] Attempt {attempt}/{attempts} for {image_path}")
+                self.page.wait_for_selector(thumbnail, timeout=10000)
+            except PlaywrightTimeoutError:
+                raise UploadError("Thumbnail did not appear - upload may have failed")
 
-                # Step 1: Click upload button
-                upload_btn = Selectors.IMAGE['trigger_btn']
-                if self.page.locator(upload_btn).count() == 0:
-                    raise UploadError("Upload button not found")
+            submit_btn = Selectors.IMAGE['submit_btn']
+            try:
+                self.page.wait_for_selector(submit_btn, timeout=5000)
+                self.page.click(submit_btn)
+            except PlaywrightTimeoutError:
+                raise UploadError("Submit button did not become active")
 
-                self.page.click(upload_btn)
-                self.page.wait_for_timeout(500)
+            modal = Selectors.IMAGE['modal']
+            try:
+                self.page.wait_for_selector(modal, state="hidden", timeout=10000)
+            except PlaywrightTimeoutError:
+                logger.warning("Modal did not close, continuing anyway")
 
-                # Step 2: Set file input
-                file_input = Selectors.IMAGE['file_input']
-                if self.page.locator(file_input).count() == 0:
-                    raise UploadError("File input not found")
-
-                self.page.set_input_files(file_input, image_path)
-
-                # Step 3: Wait for thumbnail to appear
-                thumbnail = Selectors.IMAGE['thumbnail']
-                try:
-                    self.page.wait_for_selector(thumbnail, timeout=30000)
-                except PlaywrightTimeoutError:
-                    raise UploadError("Thumbnail did not appear within 30s")
-
-                # Step 4: Click submit button when active
-                submit_btn = Selectors.IMAGE['submit_btn']
-                try:
-                    self.page.wait_for_selector(submit_btn, timeout=20000)
-                    self.page.click(submit_btn)
-                except PlaywrightTimeoutError:
-                    raise UploadError("Submit button did not become active")
-
-                # Step 5: Wait for modal to close
-                modal = Selectors.IMAGE['modal']
-                try:
-                    self.page.wait_for_selector(modal, state="hidden", timeout=30000)
-                except PlaywrightTimeoutError:
-                    raise UploadError("Image modal did not close in time")
-
-                cursor_restored = self._set_cursor_at_end_nicedit()
-                logger.info(
-                    "[nicedit] Restored cursor after modal close success=%s",
-                    cursor_restored,
-                )
-
-                logger.info(f"Uploaded image: {image_path}")
-                return True
-
-            except UploadError as upload_error:
-                last_error = upload_error
-                logger.warning(f"[upload] Attempt {attempt} failed: {upload_error}")
-                self.page.wait_for_timeout(1000)
-            except Exception as e:
-                last_error = UploadError(f"Image upload failed: {e}")
-                logger.warning(f"Failed to upload image {image_path}: {e}")
-                self.page.wait_for_timeout(1000)
-
-        raise UploadError(str(last_error))
-
-    def _get_editor_image_count(self) -> int:
-        """Return number of <img> tags currently in the nicEdit editor."""
-        script = """
-        () => {
-            __NICEDIT_HELPER__
-            try {
-                const editorInstance = typeof nicEditors !== 'undefined'
-                    ? nicEditors.findEditor('blogContents')
-                    : null;
-                let source = '';
-                if (editorInstance) {
-                    source = editorInstance.getContent() || '';
-                } else {
-                    const editorDiv = getPrimaryNiceditElement();
-                    source = editorDiv ? editorDiv.innerHTML : '';
-                }
-                if (!source) {
-                    return 0;
-                }
-                const matches = source.match(/<img\\b/gi);
-                return matches ? matches.length : 0;
-            } catch (error) {
-                console.error('Failed to count editor images', error);
-                return 0;
-            }
-        }
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            count = self.page.evaluate(script)
-            return int(count or 0)
-        except Exception as count_error:
-            logger.debug(f"Could not determine editor image count: {count_error}")
-            return 0
-
-    def _wait_for_editor_image_count(self, expected_count: int, timeout: int = 8000) -> bool:
-        """Wait until the nicEdit editor reports at least expected_count images."""
-        if expected_count <= 0:
+            logger.info(f"Uploaded image: {image_path}")
             return True
 
-        wait_script = """
-        ({ expected }) => {
-            __NICEDIT_HELPER__
-            try {
-                const editorInstance = typeof nicEditors !== 'undefined'
-                    ? nicEditors.findEditor('blogContents')
-                    : null;
-                let source = '';
-                if (editorInstance) {
-                    source = editorInstance.getContent() || '';
-                } else {
-                    const editorDiv = getPrimaryNiceditElement();
-                    source = editorDiv ? editorDiv.innerHTML : '';
-                }
-                if (!source) {
-                    return false;
-                }
-                const matches = source.match(/<img\\b/gi);
-                const count = matches ? matches.length : 0;
-                return count >= expected;
-            } catch (error) {
-                console.error('Failed to evaluate editor image count', error);
-                return false;
-            }
-        }
-        """
-        wait_script = wait_script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            self.page.wait_for_function(wait_script, arg={'expected': expected_count}, timeout=timeout)
-            logger.debug(f"Editor image count reached {expected_count}")
-            return True
-        except PlaywrightTimeoutError:
-            logger.warning(f"Image insertion verification timed out (expected count: {expected_count})")
-            return False
-
-    def _sync_nicedit_content(self) -> None:
-        """Ensure nicEditor content is synced back to the underlying textarea."""
-        sync_script = """
-        () => {
-            __NICEDIT_HELPER__
-            try {
-                const editorInstance = typeof nicEditors !== 'undefined'
-                    ? nicEditors.findEditor('blogContents')
-                    : null;
-                if (editorInstance) {
-                    editorInstance.saveContent();
-                    return true;
-                }
-                const textarea = document.querySelector('textarea#blogContents');
-                const editorDiv = getPrimaryNiceditElement();
-                if (textarea && editorDiv) {
-                    textarea.value = editorDiv.innerHTML;
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('Failed to sync nicEdit content', error);
-                return false;
-            }
-        }
-        """
-        sync_script = sync_script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            synced = self.page.evaluate(sync_script)
-            if not synced:
-                logger.debug("nicEdit content synchronization skipped (editor instance not available)")
-        except Exception as sync_error:
-            logger.warning(f"Failed to synchronize nicEdit content: {sync_error}")
-
-    def _log_editor_state(self, stage: str = "") -> None:
-        """Log editor HTML/textareas to help verify publication content."""
-        if not logger.isEnabledFor(logging.DEBUG):
-            return
-        script = """
-        () => {
-            __NICEDIT_HELPER__
-            try {
-                const editorInstance = typeof nicEditors !== 'undefined'
-                    ? nicEditors.findEditor('blogContents')
-                    : null;
-                let html = '';
-                if (editorInstance) {
-                    html = editorInstance.getContent() || '';
-                } else {
-                    const editorDiv = getPrimaryNiceditElement();
-                    html = editorDiv ? editorDiv.innerHTML : '';
-                }
-                const textarea = document.querySelector('textarea#blogContents');
-                const textareaValue = textarea ? textarea.value : '';
-                const htmlImages = html ? (html.match(/<img\\b/gi) || []).length : 0;
-                return {
-                    htmlLength: html.length,
-                    textareaLength: textareaValue.length,
-                    htmlPreview: html.slice(0, 200),
-                    textareaPreview: textareaValue.slice(0, 200),
-                    imageCount: htmlImages
-                };
-            } catch (error) {
-                return { error: error?.message || String(error) };
-            }
-        }
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            info = self.page.evaluate(script)
-            if info.get('error'):
-                logger.warning(f"[debug-editor] {stage} failed: {info['error']}")
-            else:
-                logger.debug(
-                    f"[debug-editor] {stage}: html_len={info['htmlLength']}, "
-                    f"textarea_len={info['textareaLength']}, images={info['imageCount']}, "
-                    f"html_preview={info['htmlPreview']!r}"
-                )
-        except Exception as log_error:
-            logger.warning(f"Unable to log editor state ({stage}): {log_error}")
+        except UploadError:
+            raise
+        except Exception as e:
+            logger.warning(f"Failed to upload image {image_path}: {e}")
+            raise UploadError(f"Image upload failed: {e}")
 
     def _set_cursor_at_end_nicedit(self) -> bool:
         """
@@ -1104,178 +934,6 @@ class SALONBoardClient:
             logger.warning(f"Error moving cursor in nicEdit: {e}")
             return False
 
-    def _mark_existing_editor_images(self) -> None:
-        """Add a data marker to all existing images so new uploads can be detected."""
-        script = """
-        () => {
-            __NICEDIT_HELPER__
-            try {
-                const editor = getPrimaryNiceditElement();
-                if (!editor) {
-                    return false;
-                }
-                editor.querySelectorAll('img').forEach(img => {
-                    if (!img.hasAttribute('data-image-bound')) {
-                        img.setAttribute('data-image-bound', 'existing');
-                    }
-                });
-                return true;
-            } catch (error) {
-                console.error('Failed to mark existing images', error);
-                return false;
-            }
-        }
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            self.page.evaluate(script)
-        except Exception as err:
-            logger.debug(f"Could not mark existing images: {err}")
-
-    def _append_text_to_editor(self, raw_text: str) -> bool:
-        """Append sanitized HTML converted from raw_text to the editor."""
-        html_content = raw_text.replace('\r\n', '\n').replace('\r', '\n').replace('\n', '<br>')
-        script = f"""
-        () => {{
-            __NICEDIT_HELPER__
-            try {{
-                const editor = getPrimaryNiceditElement();
-                if (!editor) {{
-                    return false;
-                }}
-                const temp = document.createElement('div');
-                temp.innerHTML = {json.dumps(html_content)};
-                while (temp.firstChild) {{
-                    editor.appendChild(temp.firstChild);
-                }}
-                return true;
-            }} catch (error) {{
-                console.error('Append text error', error);
-                return false;
-            }}
-        }}
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            result = self.page.evaluate(script)
-            if not result:
-                logger.warning("Failed to append text segment to editor")
-            return result
-        except Exception as err:
-            logger.warning(f"Append text execution failed: {err}")
-            return False
-
-    def _generate_anchor_id(self, index: int) -> str:
-        return f"nicedit-image-anchor-{index}-{uuid.uuid4().hex}"
-
-    def _create_image_anchor(self, anchor_id: str) -> bool:
-        """Insert a zero-sized span that marks where an image should be placed."""
-        script = f"""
-        () => {{
-            __NICEDIT_HELPER__
-            try {{
-                const editor = getPrimaryNiceditElement();
-                if (!editor) {{
-                    return false;
-                }}
-                const anchor = document.createElement('span');
-                anchor.setAttribute('data-image-anchor', {json.dumps(anchor_id)});
-                anchor.setAttribute('data-image-anchor-pending', 'true');
-                anchor.style.display = 'inline';
-                anchor.style.minWidth = '1px';
-                anchor.style.minHeight = '1px';
-                anchor.style.lineHeight = '1px';
-                anchor.innerHTML = '&nbsp;';
-                editor.appendChild(anchor);
-                return true;
-            }} catch (error) {{
-                console.error('Create anchor error', error);
-                return false;
-            }}
-        }}
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            result = self.page.evaluate(script)
-            if not result:
-                logger.warning(f"Failed to create image anchor {anchor_id}")
-            return result
-        except Exception as err:
-            logger.warning(f"Create anchor execution failed: {err}")
-            return False
-
-    def _move_new_image_to_anchor(self, anchor_id: str) -> bool:
-        """Move the most recent image upload to the specified anchor location."""
-        if not self._wait_for_unbound_editor_image(timeout=15000):
-            logger.warning("[nicedit] No unbound image detected before anchor move")
-            return False
-
-        script = f"""
-        () => {{
-            __NICEDIT_HELPER__
-            try {{
-                const editor = getPrimaryNiceditElement();
-                if (!editor) {{
-                    return false;
-                }}
-                const anchor = editor.querySelector(`[data-image-anchor="{anchor_id}"]`);
-                if (!anchor) {{
-                    return false;
-                }}
-                const images = Array.from(editor.querySelectorAll('img'));
-                if (!images.length) {{
-                    return false;
-                }}
-                const target = images.find(img => !img.hasAttribute('data-image-bound')) || images[images.length - 1];
-                if (!target) {{
-                    return false;
-                }}
-                anchor.parentNode.insertBefore(target, anchor);
-                target.setAttribute('data-image-bound', anchor_id);
-                anchor.remove();
-                return true;
-            }} catch (error) {{
-                console.error('Move image to anchor error', error);
-                return false;
-            }}
-        }}
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            result = self.page.evaluate(script)
-            if not result:
-                logger.warning(f"Could not move uploaded image to anchor {anchor_id}")
-            else:
-                logger.info(f"[nicedit] Forced image to anchor {anchor_id}")
-            return result
-        except Exception as err:
-            logger.warning(f"Anchor relocation failed: {err}")
-            return False
-
-    def _wait_for_unbound_editor_image(self, timeout: int = 10000) -> bool:
-        script = """
-        () => {
-            __NICEDIT_HELPER__
-            try {
-                const editor = getPrimaryNiceditElement();
-                if (!editor) {
-                    return false;
-                }
-                return Array.from(editor.querySelectorAll('img')).some(img => !img.hasAttribute('data-image-bound'));
-            } catch (error) {
-                console.error('Unbound image wait error', error);
-                return false;
-            }
-        }
-        """
-        script = script.replace("__NICEDIT_HELPER__", JS_GET_PRIMARY_NICEDIT)
-        try:
-            self.page.wait_for_function(script, timeout=timeout)
-            return True
-        except PlaywrightTimeoutError:
-            logger.warning("[nicedit] Waiting for unbound image timed out")
-            return False
-
     def _fill_content_fallback(self, content: str, image_paths: List[str]) -> None:
         """
         Fallback method to fill content when nicEdit is not available
@@ -1309,8 +967,6 @@ class SALONBoardClient:
                 self._upload_single_image(image_path)
             except UploadError as e:
                 logger.warning(f"Fallback image upload failed: {e}")
-        self._sync_nicedit_content()
-        self._log_editor_state("after_fill_fallback")
 
     # =========================================================================
     # Blog Publication (Section 3.5 of playwright_automation_spec.md)
