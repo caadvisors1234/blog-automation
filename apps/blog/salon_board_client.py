@@ -11,7 +11,7 @@ import re
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -744,9 +744,7 @@ class SALONBoardClient:
     def _fill_content_with_images(self, content: str, image_paths: List[str]) -> None:
         """
         nicEdit にテキストと画像をプレースホルダー順で挿入する。
-        1) nicEditor API が使えればそれを優先
-        2) だめなら contenteditable div を直接操作
-        3) それも失敗したら textarea フォールバック
+        nicEditor API を前提としたシンプル実装（フォールバック排除）
         """
         try:
             # 画像挿入順トラッキングを初期化
@@ -820,49 +818,14 @@ class SALONBoardClient:
                     logger.debug("Content filled using nicEditor API")
                     return
                 else:
-                    logger.warning("nicEditor API not available, trying fallback methods")
+                    logger.warning("nicEditor API not available")
             except Exception as api_err:
                 logger.warning(f"nicEditor API method failed: {api_err}")
-
-            # --- Method 2: contenteditable 直接操作 ---
-            try:
-                editor_div = self.page.locator(Selectors.FORM['editor_div'])
-                if editor_div.count() > 0:
-                    editor_div.evaluate("el => el.innerHTML = ''")
-                    logger.debug("[content-fill][contenteditable] cleared editor div")
-
-                    for i, part in enumerate(parts):
-                        if i % 2 == 0:
-                            if part.strip():
-                                html_content = part.replace('\\n', '<br>').replace('`', '\\`').replace('${', '\\${')
-                                logger.debug(
-                                    "[content-fill][contenteditable] text-part index=%s length=%s",
-                                    i,
-                                    len(part),
-                                )
-                                editor_div.evaluate(f"el => el.innerHTML += `{html_content}`")
-                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
-                        else:
-                            image_index = int(part) - 1
-                            if 0 <= image_index < len(image_paths):
-                                logger.debug("[content-fill][contenteditable] image placeholder=%s -> file_index=%s path=%s", part, image_index, image_paths[image_index])
-                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
-                                self._upload_single_image(image_paths[image_index])
-                                editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
-                                self.image_seq += 1
-                                self._move_new_image_to_end(self.image_seq)
-
-                    logger.debug("Content filled using contenteditable div")
-                    return
-            except Exception as div_err:
-                logger.warning(f"Contenteditable div method failed: {div_err}")
-
-            # --- Method 3: textarea フォールバック ---
-            raise Exception("All primary methods failed, using fallback")
+                raise
 
         except Exception as e:
             logger.warning(f"Error filling content in nicEdit: {e}")
-            self._fill_content_fallback(content, image_paths)
+            raise
 
     def _move_new_image_to_end(self, seq: int) -> None:
         """Force newly added image (inserted by nicEdit/uploader) to the end of the editor.
@@ -1001,38 +964,8 @@ class SALONBoardClient:
             return False
 
     def _fill_content_fallback(self, content: str, image_paths: List[str]) -> None:
-        """
-        Fallback method to fill content when nicEdit is not available
-        
-        Args:
-            content: Blog content
-            image_paths: List of image file paths
-        """
-        # Remove image placeholders for fallback
-        clean_content = re.sub(r'\{\{image_\d+\}\}', '', content)
-        
-        content_selectors = [
-            'textarea[name="content"]',
-            '#content',
-            '.editor textarea',
-            'textarea.blog-content',
-        ]
-        
-        for selector in content_selectors:
-            try:
-                if self.page.locator(selector).count() > 0:
-                    self.page.fill(selector, clean_content)
-                    logger.debug(f"Filled content using fallback selector: {selector}")
-                    break
-            except Exception:
-                continue
-        
-        # Try to upload images sequentially
-        for image_path in image_paths:
-            try:
-                self._upload_single_image(image_path)
-            except UploadError as e:
-                logger.warning(f"Fallback image upload failed: {e}")
+        """Removed fallback: nicEdit is required. Kept for compatibility."""
+        raise SALONBoardError("nicEdit editor not available")
 
     # =========================================================================
     # Blog Publication (Section 3.5 of playwright_automation_spec.md)
