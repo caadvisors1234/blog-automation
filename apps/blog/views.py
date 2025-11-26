@@ -652,9 +652,23 @@ def post_edit(request, pk):
     post = get_object_or_404(BlogPost, pk=pk, user=request.user)
 
     if request.method == 'POST':
-        # Update only title and content
-        post.title = request.POST.get('title', post.title)[:25]
-        post.content = request.POST.get('content', post.content)
+        # Get form data
+        title = request.POST.get('title', post.title)
+        content = request.POST.get('content', post.content)
+
+        # Validate title length (max 25 characters)
+        if len(title) > 25:
+            messages.error(request, 'タイトルは25文字以内にしてください。')
+            return redirect('blog:post_edit', pk=post.pk)
+
+        # Validate content length (max 1000 characters)
+        if len(content) > 1000:
+            messages.error(request, '本文は1000文字以内にしてください。')
+            return redirect('blog:post_edit', pk=post.pk)
+
+        # Update post
+        post.title = title
+        post.content = content
         post.save(update_fields=['title', 'content', 'updated_at'])
 
         messages.success(request, '記事を更新しました')

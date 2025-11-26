@@ -114,7 +114,7 @@ def generate_blog_content_task(self, post_id: int):
 【要件】
 - 美容サロンのお客様向けの親しみやすい記事を作成
 - タイトルは25文字以内で魅力的に
-- 本文は600〜800文字程度
+- 本文は800〜900文字程度（最大1000文字厳守）
 - キーワードを自然に含める
 - 読者が行動したくなるような内容に"""
 
@@ -139,6 +139,24 @@ def generate_blog_content_task(self, post_id: int):
             )
 
             notifier.send_progress(80, "生成完了。データベースを更新中...")
+
+            # Truncate title and content for each variation
+            for variation in result['variations']:
+                # Truncate title to 25 characters
+                if 'title' in variation and len(variation['title']) > 25:
+                    logger.warning(
+                        f"Post {post_id} variation title exceeds 25 chars "
+                        f"({len(variation['title'])} chars), truncating..."
+                    )
+                    variation['title'] = variation['title'][:25]
+
+                # Truncate content to 1000 characters
+                if 'content' in variation and len(variation['content']) > 1000:
+                    logger.warning(
+                        f"Post {post_id} variation content exceeds 1000 chars "
+                        f"({len(variation['content'])} chars), truncating..."
+                    )
+                    variation['content'] = variation['content'][:1000]
 
             # Update post with generated variations
             # Refresh from database to avoid stale object issues
