@@ -113,9 +113,9 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         blog_post = self.get_object()
 
         # Validate that post can be generated
-        if blog_post.status not in ['draft', 'failed']:
+        if blog_post.status != 'draft':
             return Response(
-                {'detail': 'Post must be in draft or failed status to generate'},
+                {'detail': 'Post must be in draft status to generate'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -190,7 +190,15 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         blog_post.status = 'publishing'
         blog_post.save(update_fields=['status'])
 
-        # Create PostLog
+        # Delete existing PostLog if exists (OneToOneField constraint)
+        try:
+            existing_log = PostLog.objects.get(blog_post=blog_post)
+            existing_log.delete()
+            logger.info(f"Deleted existing PostLog for blog_post {blog_post.id}")
+        except PostLog.DoesNotExist:
+            pass
+
+        # Create new PostLog
         post_log = PostLog.objects.create(
             user=request.user,
             blog_post=blog_post,

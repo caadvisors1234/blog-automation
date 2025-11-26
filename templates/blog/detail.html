@@ -80,7 +80,7 @@
     </section>
     {% endif %}
     
-    {% if post.status == 'draft' or post.status == 'failed' %}
+    {% if post.status == 'draft' %}
     <section class="card mb-8 border border-pink-100 bg-pink-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -93,13 +93,17 @@
         </div>
     </section>
     {% endif %}
-    
-    {% if post.status == 'ready' %}
+
+    {% if post.status == 'ready' or post.status == 'failed' %}
     <section class="card mb-8 border border-green-100 bg-green-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
                 <h3 class="text-body font-medium text-gray-900">SALON BOARD投稿</h3>
+                {% if post.status == 'failed' %}
+                <p class="text-caption text-red-600">前回の投稿が失敗しました。再度投稿を試みてください。</p>
+                {% else %}
                 <p class="text-caption text-gray-500">記事をSALON BOARDに投稿します</p>
+                {% endif %}
             </div>
             <button onclick="blogActions.publish({{ post.pk }})" class="btn btn-primary">
                 投稿を開始
