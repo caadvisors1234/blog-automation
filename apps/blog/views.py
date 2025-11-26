@@ -14,7 +14,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
-from .models import BlogPost, BlogImage, PostLog
+from .models import BlogPost, BlogImage, PostLog, BlogPostTemplate
 from .serializers import (
     BlogPostListSerializer,
     BlogPostDetailSerializer,
@@ -442,6 +442,7 @@ def post_create(request):
         tone = request.POST.get('tone', 'friendly')
         stylist_id = request.POST.get('stylist_id', '')
         coupon_name = request.POST.get('coupon_name', '')
+        template_id = request.POST.get('template_id', '')
 
         # Validate required fields
         if not keywords:
@@ -491,7 +492,7 @@ def post_create(request):
             )
         
         # Immediately start AI generation task
-        task = generate_blog_content_task.delay(post.id)
+        task = generate_blog_content_task.delay(post.id, template_id=template_id)
         post.celery_task_id = task.id
         post.save(update_fields=['celery_task_id'])
         
@@ -507,6 +508,9 @@ def post_create(request):
         messages.info(request, 'AIが3つの記事案を生成中です。少々お待ちください...')
         return redirect('blog:post_generating', pk=post.pk)
 
+    # Get user's templates
+    templates = BlogPostTemplate.objects.filter(user=request.user).order_by('name')
+
     context = {
         'stylists': stylists,
         'coupons': coupons,
@@ -516,6 +520,7 @@ def post_create(request):
             ('casual', 'カジュアル'),
             ('formal', 'フォーマル'),
         ],
+        'templates': templates,
     }
 
     return render(request, 'blog/create.html', context)
@@ -674,8 +679,12 @@ def post_edit(request, pk):
         messages.success(request, '記事を更新しました')
         return redirect('blog:post_detail', pk=post.pk)
 
+    # Get user's templates
+    templates = BlogPostTemplate.objects.filter(user=request.user).order_by('name')
+
     context = {
         'post': post,
+        'templates': templates,
     }
 
     return render(request, 'blog/edit.html', context)

@@ -48,6 +48,35 @@
                         <span id="content-count">0</span> / 1000文字
                     </p>
                 </div>
+
+                <!-- Template Selection -->
+                {% if templates %}
+                <div class="mt-4 p-4 rounded-lg bg-blue-50 border border-blue-200">
+                    <label for="template-select" class="block text-body font-medium text-blue-900 mb-2">
+                        テンプレートを追加
+                    </label>
+                    <p class="text-caption text-blue-700 mb-3">
+                        保存済みのテンプレートを本文の最後に追加できます
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <select id="template-select" class="flex-1">
+                            <option value="">-- テンプレートを選択 --</option>
+                            {% for template in templates %}
+                            <option value="{{ template.id }}" data-content="{{ template.content|escapejs }}">
+                                {{ template.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" id="add-template-btn" class="btn btn-secondary">
+                            追加
+                        </button>
+                    </div>
+                    <div id="template-preview" class="mt-3 p-3 rounded bg-white border border-blue-200 hidden">
+                        <p class="text-caption text-gray-500 mb-2">プレビュー:</p>
+                        <p id="template-preview-content" class="text-caption text-gray-700 whitespace-pre-wrap"></p>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </section>
 
@@ -136,6 +165,59 @@
                 return false;
             }
         });
+
+        // Template selection functionality
+        const templateSelect = document.getElementById('template-select');
+        const addTemplateBtn = document.getElementById('add-template-btn');
+        const templatePreview = document.getElementById('template-preview');
+        const templatePreviewContent = document.getElementById('template-preview-content');
+
+        if (templateSelect && addTemplateBtn) {
+            // Show preview when template is selected
+            templateSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const templateContent = selectedOption.getAttribute('data-content');
+
+                if (templateContent) {
+                    templatePreviewContent.textContent = templateContent;
+                    templatePreview.classList.remove('hidden');
+                } else {
+                    templatePreview.classList.add('hidden');
+                }
+            });
+
+            // Add template to content
+            addTemplateBtn.addEventListener('click', function() {
+                const selectedOption = templateSelect.options[templateSelect.selectedIndex];
+                const templateContent = selectedOption.getAttribute('data-content');
+
+                if (!templateContent) {
+                    alert('テンプレートを選択してください。');
+                    return;
+                }
+
+                // Check if adding template will exceed limit
+                const currentContent = contentTextarea.value;
+                const separator = currentContent && !currentContent.endsWith('\n') ? '\n\n' : '\n';
+                const newContent = currentContent + separator + templateContent;
+
+                if (newContent.length > 1000) {
+                    alert('テンプレートを追加すると1000文字を超えてしまいます。本文を短くしてから追加してください。');
+                    return;
+                }
+
+                // Add template to content
+                contentTextarea.value = newContent;
+                updateContentCount();
+
+                // Reset selection
+                templateSelect.selectedIndex = 0;
+                templatePreview.classList.add('hidden');
+
+                // Show success message
+                alert('テンプレートを追加しました。');
+            });
+        }
     });
 </script>
 {% endblock %}

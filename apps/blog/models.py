@@ -366,3 +366,56 @@ class SALONBoardAccount(models.Model):
 
         fernet = Fernet(settings.ENCRYPTION_KEY.encode())
         self.encrypted_password = fernet.encrypt(password.encode()).decode()
+
+
+class BlogPostTemplate(models.Model):
+    """
+    User-defined blog post templates for footer text.
+
+    Allows users to save common footer text (e.g., salon info, contact details)
+    that can be quickly added to blog posts.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='blog_post_templates',
+        verbose_name='User'
+    )
+    name = models.CharField(
+        max_length=100,
+        verbose_name='Template Name',
+        help_text='Short name to identify this template (e.g., "Standard Footer", "Campaign Info")'
+    )
+    content = models.TextField(
+        max_length=500,
+        verbose_name='Template Content',
+        help_text='Footer text to append to blog posts (max 500 characters)'
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
+
+    class Meta:
+        verbose_name = 'Blog Post Template'
+        verbose_name_plural = 'Blog Post Templates'
+        db_table = 'blog_post_templates'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'name'],
+                name='unique_template_name_per_user'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"
+
+    def clean(self):
+        """Validate template content length."""
+        from django.core.exceptions import ValidationError
+
+        if len(self.content) > 500:
+            raise ValidationError({
+                'content': 'Template content must be 500 characters or less.'
+            })

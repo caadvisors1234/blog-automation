@@ -59,6 +59,30 @@
                               placeholder="例: 20代〜30代女性向けに明るく親しみやすい文章で紹介してください。"></textarea>
                     <p class="text-caption text-gray-400 mt-1.5">空欄の場合、キーワードと画像からAIが最適な記事を自動生成します。</p>
                 </div>
+
+                <!-- Template Selection -->
+                {% if templates %}
+                <div>
+                    <label for="template_id" class="block text-body font-medium text-gray-700 mb-2">
+                        テンプレート
+                        <span class="text-caption text-gray-400 font-normal ml-1">(任意)</span>
+                    </label>
+                    <select id="template_id" name="template_id">
+                        <option value="">-- 選択しない --</option>
+                        {% for template in templates %}
+                        <option value="{{ template.id }}" data-content="{{ template.content|escapejs }}">
+                            {{ template.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-caption text-gray-400 mt-1.5">選択したテンプレート（フッター文）をAI生成後の記事に自動追加します。</p>
+
+                    <div id="template-preview-create" class="mt-3 p-3 rounded bg-blue-50 border border-blue-200 hidden">
+                        <p class="text-caption text-blue-900 font-medium mb-2">プレビュー:</p>
+                        <p id="template-preview-content-create" class="text-caption text-gray-700 whitespace-pre-wrap"></p>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </section>
         
@@ -168,6 +192,25 @@
             window.imagePreview.render();
         }
 
+        // Template preview functionality
+        const templateSelect = document.getElementById('template_id');
+        const templatePreview = document.getElementById('template-preview-create');
+        const templatePreviewContent = document.getElementById('template-preview-content-create');
+
+        if (templateSelect && templatePreview) {
+            templateSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const templateContent = selectedOption.getAttribute('data-content');
+
+                if (templateContent) {
+                    templatePreviewContent.textContent = templateContent;
+                    templatePreview.classList.remove('hidden');
+                } else {
+                    templatePreview.classList.add('hidden');
+                }
+            });
+        }
+
         // Always use AJAX for form submission to ensure files are properly sent
         const form = document.querySelector('form');
         const submitBtn = form.querySelector('button[type="submit"]');
@@ -241,6 +284,7 @@
             formData.append('ai_prompt', form.querySelector('#ai_prompt').value || '');
             formData.append('stylist_id', form.querySelector('#stylist_id')?.value || '');
             formData.append('coupon_name', form.querySelector('#coupon_name')?.value || '');
+            formData.append('template_id', form.querySelector('#template_id')?.value || '');
             
             // Add images explicitly
             files.forEach(file => {

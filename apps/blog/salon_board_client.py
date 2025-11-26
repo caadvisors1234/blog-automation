@@ -11,6 +11,7 @@ import logging
 import re
 import time
 import uuid
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
 from django.conf import settings
@@ -189,6 +190,8 @@ class SALONBoardClient:
     - docs/system_requirements.md
     """
 
+    SCREENSHOT_DIR = Path(settings.BASE_DIR) / 'logs' / 'screenshots'
+
     def __init__(self):
         """Initialize SALON BOARD client"""
         self.playwright = None
@@ -323,9 +326,7 @@ class SALONBoardClient:
             try:
                 if self.page.locator(selector).count() > 0:
                     # Take screenshot for debugging
-                    timestamp = int(time.time())
-                    screenshot_path = f'/tmp/salon_board_captcha_{timestamp}.png'
-                    self.page.screenshot(path=screenshot_path)
+                    screenshot_path = self._take_screenshot('captcha_detected')
                     logger.error(f"Robot detection detected: {selector}. Screenshot: {screenshot_path}")
                     raise RobotDetectionError(f"CAPTCHA detected: {selector}")
             except RobotDetectionError:
@@ -349,13 +350,17 @@ class SALONBoardClient:
     def _take_screenshot(self, name: str) -> str:
         """Take screenshot for debugging"""
         timestamp = int(time.time())
-        screenshot_path = f'/tmp/salon_board_{name}_{timestamp}.png'
         try:
-            self.page.screenshot(path=screenshot_path)
+            self.SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception as mkdir_error:
+            logger.warning(f"Failed to ensure screenshot directory: {mkdir_error}")
+        screenshot_path = self.SCREENSHOT_DIR / f'salon_board_{name}_{timestamp}.png'
+        try:
+            self.page.screenshot(path=str(screenshot_path))
             logger.info(f"Screenshot saved: {screenshot_path}")
         except Exception as e:
             logger.warning(f"Failed to take screenshot: {e}")
-        return screenshot_path
+        return str(screenshot_path)
 
     # =========================================================================
     # Login and Salon Selection (Section 3.2 of playwright_automation_spec.md)
@@ -1175,10 +1180,12 @@ class SALONBoardClient:
                 }}
                 const anchor = document.createElement('span');
                 anchor.setAttribute('data-image-anchor', {json.dumps(anchor_id)});
-                anchor.style.display = 'inline-block';
-                anchor.style.width = '0px';
-                anchor.style.height = '0px';
-                anchor.style.lineHeight = '0';
+                anchor.setAttribute('data-image-anchor-pending', 'true');
+                anchor.style.display = 'inline';
+                anchor.style.minWidth = '1px';
+                anchor.style.minHeight = '1px';
+                anchor.style.lineHeight = '1px';
+                anchor.innerHTML = '&nbsp;';
                 editor.appendChild(anchor);
                 return true;
             }} catch (error) {{
@@ -1199,7 +1206,7 @@ class SALONBoardClient:
 
     def _move_new_image_to_anchor(self, anchor_id: str) -> bool:
         """Move the most recent image upload to the specified anchor location."""
-        if not self._wait_for_unbound_editor_image(timeout=10000):
+        if not self._wait_for_unbound_editor_image(timeout=15000):
             logger.warning("[nicedit] No unbound image detected before anchor move")
             return False
 

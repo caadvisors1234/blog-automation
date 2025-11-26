@@ -31,21 +31,22 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def generate_blog_content_task(self, post_id: int):
+def generate_blog_content_task(self, post_id: int, template_id: str = ''):
     """
     Celery task to generate 3 blog content variations using Gemini AI.
-    
+
     Sends real-time progress updates via WebSocket.
     Generates 3 article variations for user selection.
 
     Args:
         post_id: BlogPost ID
+        template_id: Optional BlogPostTemplate ID to append to generated content
 
     Returns:
         Dictionary with generation result including 3 variations
     """
     notifier = None
-    
+
     try:
         logger.info(f"Starting AI content generation (3 variations) for post {post_id}")
 
@@ -55,6 +56,19 @@ def generate_blog_content_task(self, post_id: int):
         except BlogPost.DoesNotExist:
             logger.error(f"BlogPost {post_id} not found")
             return {'success': False, 'error': 'Blog post not found'}
+
+        # Get template content if template_id is provided
+        template_content = ''
+        if template_id:
+            try:
+                from .models import BlogPostTemplate
+                template = BlogPostTemplate.objects.get(id=template_id, user=post.user)
+                template_content = template.content
+                logger.info(f"Using template '{template.name}' for post {post_id}")
+            except BlogPostTemplate.DoesNotExist:
+                logger.warning(f"Template {template_id} not found for user {post.user.id}")
+            except Exception as e:
+                logger.error(f"Error loading template {template_id}: {e}")
 
         # Initialize progress notifier
         notifier = ProgressNotifier(
@@ -152,7 +166,7 @@ def generate_blog_content_task(self, post_id: int):
 
             notifier.send_progress(80, "生成完了。データベースを更新中...")
 
-            # Truncate title and content for each variation
+            # Truncate title and content for each variation, and append template if provided
             for variation in result['variations']:
                 # Truncate title to 25 characters
                 if 'title' in variation and len(variation['title']) > 25:
@@ -162,8 +176,30 @@ def generate_blog_content_task(self, post_id: int):
                     )
                     variation['title'] = variation['title'][:25]
 
-                # Truncate content to 1000 characters
-                if 'content' in variation and len(variation['content']) > 1000:
+                # Append template content if provided
+                if template_content and 'content' in variation:
+                    current_content = variation['content']
+                    separator = '\n\n' if current_content and not current_content.endswith('\n') else '\n'
+                    combined_content = current_content + separator + template_content
+
+                    # Check if combined content exceeds 1000 chars
+                    if len(combined_content) > 1000:
+                        logger.warning(
+                            f"Post {post_id} variation content with template exceeds 1000 chars "
+                            f"({len(combined_content)} chars), truncating base content..."
+                        )
+                        # Truncate base content to make room for template
+                        available_space = 1000 - len(separator) - len(template_content)
+                        if available_space > 0:
+                            variation['content'] = current_content[:available_space] + separator + template_content
+                        else:
+                            # Template alone exceeds 1000 chars, just truncate combined
+                            variation['content'] = combined_content[:1000]
+                    else:
+                        variation['content'] = combined_content
+
+                # Truncate content to 1000 characters if no template
+                elif 'content' in variation and len(variation['content']) > 1000:
                     logger.warning(
                         f"Post {post_id} variation content exceeds 1000 chars "
                         f"({len(variation['content'])} chars), truncating..."

@@ -128,7 +128,89 @@
             </div>
         </form>
     </section>
-    
+
+    <!-- Blog Post Templates Section -->
+    <section class="card mb-8">
+        <h2 class="text-title text-gray-900 mb-6">記事テンプレート</h2>
+        <p class="text-body text-gray-600 mb-6">
+            よく使うフッター文（サロン情報、連絡先など）をテンプレートとして保存できます。記事作成時や編集時に簡単に追加できます。
+        </p>
+
+        <!-- Create Template Form -->
+        <form method="post" class="space-y-6 mb-8 p-6 rounded-lg bg-gray-50 border border-gray-200">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_template">
+
+            <h3 class="text-body font-medium text-gray-900 mb-4">新しいテンプレートを作成</h3>
+
+            <div>
+                <label for="template_name" class="block text-body font-medium text-gray-700 mb-2">
+                    テンプレート名
+                    <span class="text-caption text-gray-400 font-normal ml-1">(例: 標準フッター、キャンペーン情報)</span>
+                </label>
+                <input type="text" id="template_name" name="template_name"
+                       maxlength="100" placeholder="テンプレート名" required>
+            </div>
+
+            <div>
+                <label for="template_content" class="block text-body font-medium text-gray-700 mb-2">
+                    テンプレート内容
+                    <span class="text-caption text-gray-400 font-normal ml-1">(最大500文字)</span>
+                </label>
+                <textarea id="template_content" name="template_content"
+                          rows="6" maxlength="500" placeholder="フッター文を入力してください" required></textarea>
+                <p class="text-caption text-gray-500 mt-1.5">
+                    <span id="template-count">0</span> / 500文字
+                </p>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                テンプレートを作成
+            </button>
+        </form>
+
+        <!-- Template List -->
+        {% if templates %}
+        <div class="space-y-4">
+            <h3 class="text-body font-medium text-gray-900 mb-4">保存済みテンプレート</h3>
+
+            {% for template in templates %}
+            <div class="p-6 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                <div class="flex items-start justify-between mb-3">
+                    <h4 class="text-body font-medium text-gray-900">{{ template.name }}</h4>
+                    <form method="post" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_template">
+                        <input type="hidden" name="template_id" value="{{ template.id }}">
+                        <button type="submit"
+                                onclick="return confirm('このテンプレートを削除しますか？')"
+                                class="text-caption text-red-600 hover:text-red-700 font-medium transition-colors">
+                            削除
+                        </button>
+                    </form>
+                </div>
+
+                <div class="p-4 rounded bg-gray-50 border border-gray-200">
+                    <p class="text-caption text-gray-700 whitespace-pre-wrap">{{ template.content }}</p>
+                </div>
+
+                <p class="text-caption text-gray-400 mt-3">
+                    作成日: {{ template.created_at|date:"Y年n月j日 H:i" }}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-6 rounded-lg bg-gray-50 border border-gray-200 text-center">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <p class="text-body text-gray-500">テンプレートがまだありません</p>
+            <p class="text-caption text-gray-400 mt-1">上のフォームから最初のテンプレートを作成してください</p>
+        </div>
+        {% endif %}
+    </section>
+
     <!-- Account Actions -->
     <section class="card">
         <h2 class="text-title text-gray-900 mb-6">アカウント</h2>
@@ -141,4 +223,39 @@
             </a>
     </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const templateContent = document.getElementById('template_content');
+        const templateCount = document.getElementById('template-count');
+
+        if (templateContent && templateCount) {
+            // Update character count
+            function updateTemplateCount() {
+                const count = templateContent.value.length;
+                templateCount.textContent = count;
+
+                // Change color based on character count
+                if (count > 500) {
+                    templateCount.classList.add('text-red-600', 'font-medium');
+                    templateCount.classList.remove('text-gray-500', 'text-yellow-600');
+                } else if (count > 450) {
+                    templateCount.classList.add('text-yellow-600', 'font-medium');
+                    templateCount.classList.remove('text-gray-500', 'text-red-600');
+                } else {
+                    templateCount.classList.add('text-gray-500');
+                    templateCount.classList.remove('text-yellow-600', 'text-red-600', 'font-medium');
+                }
+            }
+
+            // Initialize count on page load
+            updateTemplateCount();
+
+            // Update count on input
+            templateContent.addEventListener('input', updateTemplateCount);
+        }
+    });
+</script>
 {% endblock %}
