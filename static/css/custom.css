@@ -400,6 +400,22 @@ input[type="radio"]:checked {
 }
 
 /* ========================================
+   Drag and Drop
+   ======================================== */
+
+#image-preview-container {
+    transition: all 0.3s ease;
+}
+
+#image-preview-container.drag-over {
+    background-color: rgba(217, 70, 239, 0.1);
+    border: 2px dashed rgba(217, 70, 239, 0.5);
+    border-radius: 1rem;
+    padding: 1rem;
+    transform: scale(1.02);
+}
+
+/* ========================================
    Print Styles
    ======================================== */
 
@@ -408,11 +424,11 @@ input[type="radio"]:checked {
         background: white;
         color: black;
     }
-    
+
     .no-print {
         display: none !important;
     }
-    
+
     .card {
         border: 1px solid #ccc;
         background: white;

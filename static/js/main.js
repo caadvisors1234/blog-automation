@@ -112,10 +112,44 @@ class ImagePreview {
         this.container = document.getElementById(previewContainerId);
         this.maxImages = maxImages;
         this.images = [];
-        
+
         if (this.input) {
             this.input.addEventListener('change', (e) => this.handleFiles(e.target.files));
         }
+
+        // Setup drag and drop
+        this.setupDragAndDrop();
+    }
+
+    setupDragAndDrop() {
+        if (!this.container) return;
+
+        // Prevent default drag behaviors on the entire container
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            this.container.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // Highlight drop area when dragging over
+        ['dragenter', 'dragover'].forEach(eventName => {
+            this.container.addEventListener(eventName, () => {
+                this.container.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            this.container.addEventListener(eventName, () => {
+                this.container.classList.remove('drag-over');
+            });
+        });
+
+        // Handle dropped files
+        this.container.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            this.handleFiles(files);
+        });
     }
     
     handleFiles(files) {
