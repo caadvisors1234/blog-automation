@@ -10,69 +10,9 @@
         <h1 class="text-display text-gray-900 mb-2">ダッシュボード</h1>
         <p class="text-body text-gray-500">ブログ投稿の状況を確認できます</p>
     </header>
-    
-    <!-- Stats Cards -->
-    <section id="dashboard-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        <!-- Total Posts -->
-        <div class="card">
-            <p class="text-caption text-gray-500 mb-1">総投稿数</p>
-            <p id="total-posts" class="text-display text-gray-900">{{ total_posts }}</p>
-        </div>
-        
-        <!-- Monthly Posts -->
-        <div class="card">
-            <p class="text-caption text-gray-500 mb-1">今月の投稿</p>
-            <p id="monthly-posts" class="text-display text-gray-900">{{ monthly_posts }}</p>
-        </div>
-        
-        <!-- Success Rate -->
-        <div class="card">
-            <p class="text-caption text-gray-500 mb-1">成功率</p>
-            <p id="success-rate" class="text-display text-gray-900">{{ success_rate }}<span class="text-title">%</span></p>
-        </div>
-        
-        <!-- Published -->
-        <div class="card">
-            <p class="text-caption text-gray-500 mb-1">公開済み</p>
-            <p id="published-posts" class="text-display text-gray-900">{{ published_posts }}</p>
-        </div>
-    </section>
-    
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        <!-- Status Breakdown -->
-        <section class="card">
-            <h2 class="text-title text-gray-900 mb-6">ステータス別</h2>
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">下書き</span>
-                    <span class="badge badge-draft">{{ status_counts.draft }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">生成中</span>
-                    <span class="badge badge-generating">{{ status_counts.generating }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">準備完了</span>
-                    <span class="badge badge-ready">{{ status_counts.ready }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">投稿中</span>
-                    <span class="badge badge-publishing">{{ status_counts.publishing }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">公開済み</span>
-                    <span class="badge badge-published">{{ status_counts.published }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-body text-gray-600">失敗</span>
-                    <span class="badge badge-failed">{{ status_counts.failed }}</span>
-                </div>
-            </div>
-        </section>
-        
-        <!-- Quick Actions -->
-        <section class="lg:col-span-2 card">
+
+    <!-- Quick Actions -->
+    <section class="card mb-12">
             <h2 class="text-title text-gray-900 mb-6">クイックアクション</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <a href="{% url 'blog:post_create' %}" 
@@ -136,9 +76,8 @@
                     </div>
                 </a>
             </div>
-        </section>
-    </div>
-    
+    </section>
+
     <!-- Recent Posts -->
     <section class="card">
         <div class="flex items-center justify-between mb-6">
