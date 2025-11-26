@@ -20,11 +20,11 @@
     
     <form method="post" class="space-y-8">
         {% csrf_token %}
-        
-        <!-- Basic Info -->
+
+        <!-- Edit Content -->
         <section class="card">
-            <h2 class="text-title text-gray-900 mb-6">基本情報</h2>
-            
+            <h2 class="text-title text-gray-900 mb-6">記事内容</h2>
+
             <div class="space-y-6">
                 <div>
                     <label for="title" class="block text-body font-medium text-gray-700 mb-2">
@@ -32,67 +32,18 @@
                         <span class="text-caption text-gray-400 font-normal ml-1">(25文字以内)</span>
                     </label>
                     <input type="text" id="title" name="title" maxlength="25"
-                           value="{{ post.title|default:'' }}">
+                           value="{{ post.title|default:'' }}" required>
                 </div>
-                
+
                 <div>
                     <label for="content" class="block text-body font-medium text-gray-700 mb-2">
                         本文
                     </label>
-                    <textarea id="content" name="content" rows="12">{{ post.content|default:'' }}</textarea>
-                </div>
-                
-                <div>
-                    <label for="keywords" class="block text-body font-medium text-gray-700 mb-2">
-                        キーワード
-                    </label>
-                    <input type="text" id="keywords" name="keywords"
-                           value="{{ post.keywords|default:'' }}">
-                </div>
-                
-                <div>
-                    <label for="ai_prompt" class="block text-body font-medium text-gray-700 mb-2">
-                        AIプロンプト
-                    </label>
-                    <textarea id="ai_prompt" name="ai_prompt" rows="4">{{ post.ai_prompt|default:'' }}</textarea>
-                </div>
-                
-                <div>
-                    <label for="tone" class="block text-body font-medium text-gray-700 mb-2">
-                        トーン
-                    </label>
-                    <select id="tone" name="tone">
-                        {% for value, label in tone_choices %}
-                        <option value="{{ value }}" {% if post.tone == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
+                    <textarea id="content" name="content" rows="16">{{ post.content|default:'' }}</textarea>
                 </div>
             </div>
         </section>
-        
-        <!-- SALON BOARD Options -->
-        <section class="card">
-            <h2 class="text-title text-gray-900 mb-6">SALON BOARD 設定</h2>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                    <label for="stylist_id" class="block text-body font-medium text-gray-700 mb-2">
-                        スタイリストID
-                    </label>
-                    <input type="text" id="stylist_id" name="stylist_id"
-                           value="{{ post.stylist_id|default:'' }}">
-                </div>
-                
-                <div>
-                    <label for="coupon_name" class="block text-body font-medium text-gray-700 mb-2">
-                        クーポン名
-                    </label>
-                    <input type="text" id="coupon_name" name="coupon_name"
-                           value="{{ post.coupon_name|default:'' }}">
-                </div>
-            </div>
-        </section>
-        
+
         <!-- Actions -->
         <div class="flex flex-col sm:flex-row gap-4">
             <button type="submit" class="btn btn-primary flex-1 sm:flex-none">

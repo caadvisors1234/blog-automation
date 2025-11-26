@@ -647,33 +647,23 @@ def post_detail(request, pk):
 def post_edit(request, pk):
     """
     Blog post edit view.
+    Only allows editing title and content.
     """
     post = get_object_or_404(BlogPost, pk=pk, user=request.user)
-    
+
     if request.method == 'POST':
-        # Update post
+        # Update only title and content
         post.title = request.POST.get('title', post.title)[:25]
         post.content = request.POST.get('content', post.content)
-        post.ai_prompt = request.POST.get('ai_prompt', post.ai_prompt)
-        post.keywords = request.POST.get('keywords', post.keywords)
-        post.tone = request.POST.get('tone', post.tone)
-        post.stylist_id = request.POST.get('stylist_id', post.stylist_id)
-        post.coupon_name = request.POST.get('coupon_name', post.coupon_name)
-        post.save()
-        
+        post.save(update_fields=['title', 'content', 'updated_at'])
+
         messages.success(request, '記事を更新しました')
         return redirect('blog:post_detail', pk=post.pk)
-    
+
     context = {
         'post': post,
-        'tone_choices': [
-            ('friendly', 'フレンドリー'),
-            ('professional', 'プロフェッショナル'),
-            ('casual', 'カジュアル'),
-            ('formal', 'フォーマル'),
-        ],
     }
-    
+
     return render(request, 'blog/edit.html', context)
 
 
