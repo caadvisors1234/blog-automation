@@ -167,17 +167,55 @@
             window.imagePreview = new ImagePreview('image-input', 'image-preview-container', 4);
             window.imagePreview.render();
         }
-        
+
         // Always use AJAX for form submission to ensure files are properly sent
         const form = document.querySelector('form');
         const submitBtn = form.querySelector('button[type="submit"]');
-        
+        const keywordsInput = document.getElementById('keywords');
+        const stylistInput = document.getElementById('stylist_id');
+        const couponInput = document.getElementById('coupon_name');
+
+        // Validation function to check if all required fields are filled
+        function validateForm() {
+            const keywordsFilled = keywordsInput.value.trim().length > 0;
+            const stylistFilled = stylistInput.value.trim().length > 0;
+            const couponFilled = couponInput.value.trim().length > 0;
+
+            const isValid = keywordsFilled && stylistFilled && couponFilled;
+
+            // Enable/disable submit button based on validation
+            submitBtn.disabled = !isValid;
+
+            // Update button appearance
+            if (!isValid) {
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            return isValid;
+        }
+
+        // Run validation on page load
+        validateForm();
+
+        // Run validation when inputs change
+        keywordsInput.addEventListener('input', validateForm);
+        stylistInput.addEventListener('change', validateForm);
+        couponInput.addEventListener('change', validateForm);
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
+            // Validate form before submission
+            if (!validateForm()) {
+                alert('キーワード、スタイリスト、クーポンは全て必須です。');
+                return;
+            }
+
             const files = window.imagePreview.getFiles();
             console.log('Form submit - files count:', files.length);
-            
+
             // Disable submit button
             submitBtn.disabled = true;
             submitBtn.innerHTML = `

@@ -443,10 +443,29 @@ def post_create(request):
         stylist_id = request.POST.get('stylist_id', '')
         coupon_name = request.POST.get('coupon_name', '')
 
+        # Validate required fields
         if not keywords:
-            messages.error(request, 'キーワードは必須です。')
+            error_msg = 'キーワードは必須です。'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg}, status=400)
+            messages.error(request, error_msg)
             return redirect('blog:post_create')
-        
+
+        # Check if stylist_id and coupon_name are provided
+        if not stylist_id:
+            error_msg = 'スタイリストの選択は必須です。'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect('blog:post_create')
+
+        if not coupon_name:
+            error_msg = 'クーポンの選択は必須です。'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect('blog:post_create')
+
         # Create post with 'generating' status (skip draft)
         post = BlogPost.objects.create(
             user=request.user,
@@ -487,7 +506,7 @@ def post_create(request):
         
         messages.info(request, 'AIが3つの記事案を生成中です。少々お待ちください...')
         return redirect('blog:post_generating', pk=post.pk)
-    
+
     context = {
         'stylists': stylists,
         'coupons': coupons,
@@ -498,7 +517,7 @@ def post_create(request):
             ('formal', 'フォーマル'),
         ],
     }
-    
+
     return render(request, 'blog/create.html', context)
 
 

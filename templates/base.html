@@ -34,13 +34,15 @@
         {% include "includes/footer.html" %}
     </div>
     
-    <!-- Progress Modal -->
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 space-y-3"></div>
+    
+    <!-- Progress Modal (displayed during SALON BOARD publishing) -->
     <div id="progress-modal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"></div>
+        <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
         <div class="relative flex items-center justify-center min-h-full p-6">
             <div class="bg-white rounded-2xl p-8 max-w-sm w-full shadow-modal animate-fade-in">
                 <div class="text-center">
-                    <!-- Spinner -->
                     <div class="mb-6">
                         <svg class="w-12 h-12 mx-auto text-pink-500 animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
@@ -49,19 +51,14 @@
                     </div>
                     <h3 id="progress-title" class="text-title text-gray-900 mb-2">処理中</h3>
                     <p id="progress-message" class="text-body text-gray-500 mb-6">しばらくお待ちください</p>
-                    
-                    <!-- Progress bar -->
                     <div class="w-full bg-gray-100 rounded-full h-1.5 mb-3">
-                        <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                        <div id="progress-bar" class="progress-bar bg-pink-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
                     </div>
                     <p id="progress-percent" class="text-caption text-gray-400">0%</p>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed bottom-6 right-6 z-50 space-y-3"></div>
     
     <!-- Scripts -->
     <script src="{% static 'js/websocket.js' %}"></script>

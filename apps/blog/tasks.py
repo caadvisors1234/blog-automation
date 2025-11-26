@@ -13,6 +13,7 @@ All tasks support WebSocket progress notifications via Django Channels.
 import logging
 from celery import shared_task
 from django.utils import timezone
+from django.db import IntegrityError
 from .models import BlogPost, PostLog
 from .gemini_client import GeminiClient
 from .salon_board_client import (
@@ -248,12 +249,36 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 pass
 
         if not post_log:
-            post_log = PostLog.objects.create(
-                user=post.user,
-                blog_post=post,
-                status='in_progress',
-                started_at=timezone.now()
-            )
+            existing_log = getattr(post, 'log', None)
+            if existing_log:
+                post_log = existing_log
+            else:
+                try:
+                    post_log = PostLog.objects.create(
+                        user=post.user,
+                        blog_post=post,
+                        status='in_progress',
+                        started_at=timezone.now()
+                    )
+                except IntegrityError:
+                    post_log = PostLog.objects.get(blog_post=post)
+
+        # Ensure log is reset to in_progress state
+        if post_log:
+            post_log.status = 'in_progress'
+            post_log.error_message = ''
+            post_log.screenshot_path = ''
+            post_log.scraping_data = {}
+            post_log.started_at = timezone.now()
+            post_log.completed_at = None
+            post_log.duration_seconds = 0
+            try:
+                post_log.save(update_fields=[
+                    'status', 'error_message', 'screenshot_path',
+                    'scraping_data', 'started_at', 'completed_at', 'duration_seconds'
+                ])
+            except Exception as log_error:
+                logger.error(f"Failed to reset post log {post_log.id}: {log_error}")
 
         # Validate post status
         if post.status != 'publishing':
@@ -327,13 +352,16 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         
         notifier.send_progress(15, f"画像{len(image_paths)}枚を準備しました")
 
+        publication_result = None
+        publication_completed = False
+
         # Initialize SALON BOARD client and publish
         try:
             notifier.send_progress(20, "ブラウザを起動中...")
-            
+
             with SALONBoardClient() as client:
                 notifier.send_progress(30, "SALON BOARDにログイン中...")
-                
+
                 # Login (raises LoginError or RobotDetectionError on failure)
                 client.login(
                     login_id=login_id,
@@ -343,7 +371,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 notifier.send_progress(50, "ログイン成功。投稿を作成中...")
 
                 # Publish post
-                result = client.publish_blog_post(
+                publication_result = client.publish_blog_post(
                     title=post.title,
                     content=post.content,
                     image_paths=image_paths,
@@ -352,47 +380,53 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                     salon_id=post.user.hpb_salon_id,
                 )
 
-                if result['success']:
-                    # Save to database BEFORE sending notifications
-                    try:
-                        old_status = post.status
-                        post.status = 'published'
-                        post.salon_board_url = result.get('url', '')
-                        post.published_at = timezone.now()
-                        post.save(update_fields=['status', 'salon_board_url', 'published_at'])
+            if publication_result and publication_result.get('success'):
+                publication_completed = True
+                # Save to database BEFORE sending notifications
+                try:
+                    old_status = post.status
+                    post.status = 'published'
+                    post.salon_board_url = publication_result.get('url', '')
+                    post.published_at = timezone.now()
+                    post.save(update_fields=['status', 'salon_board_url', 'published_at'])
 
-                        post_log.status = 'success'
-                        post_log.screenshot_path = result.get('screenshot_path', '')
-                        post_log.completed_at = timezone.now()
-                        post_log.calculate_duration()
-                        post_log.save()
+                    post_log.status = 'success'
+                    post_log.screenshot_path = publication_result.get('screenshot_path', '')
+                    post_log.completed_at = timezone.now()
+                    post_log.calculate_duration()
+                    # calculate_duration() already saves with update_fields=['duration_seconds']
+                    # Save remaining fields
+                    post_log.save(update_fields=['status', 'screenshot_path', 'completed_at'])
 
-                        logger.info(f"Successfully published post {post_id} to SALON BOARD")
-                    except Exception as db_error:
-                        logger.error(f"Failed to save to database: {db_error}")
-                        raise
+                    logger.info(f"Successfully published post {post_id} to SALON BOARD")
+                except Exception as db_error:
+                    logger.error(f"Failed to save to database: {db_error}")
+                    raise
 
-                    # Send notifications after database operations
-                    try:
-                        notifier.send_status_update(old_status, 'published')
-                        notifier.send_progress(100, "投稿が完了しました")
-                        notifier.send_completed(
-                            result={
-                                'post_id': post_id,
-                                'url': result.get('url', ''),
-                            },
-                            message='SALON BOARDへの投稿が完了しました'
-                        )
-                    except Exception as notif_error:
-                        logger.error(f"Failed to send notification: {notif_error}")
+                # Send notifications after database operations
+                try:
+                    notifier.send_status_update(old_status, 'published')
+                    notifier.send_progress(100, "投稿が完了しました")
+                    notifier.send_completed(
+                        result={
+                            'post_id': post_id,
+                            'url': publication_result.get('url', ''),
+                        },
+                        message='SALON BOARDへの投稿が完了しました'
+                    )
+                except Exception as notif_error:
+                    logger.error(f"Failed to send notification: {notif_error}")
 
-                    return {
-                        'success': True,
-                        'post_id': post_id,
-                        'url': result.get('url', ''),
-                    }
-                else:
-                    raise SALONBoardError(result.get('message', 'Publication failed'))
+                return {
+                    'success': True,
+                    'post_id': post_id,
+                    'url': publication_result.get('url', ''),
+                }
+            else:
+                message = None
+                if publication_result:
+                    message = publication_result.get('message')
+                raise SALONBoardError(message or 'Publication failed')
 
         except RobotDetectionError as e:
             # CAPTCHA detected - do not retry (as per system_requirements.md)
@@ -484,7 +518,12 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 post.save(update_fields=['status'])
 
                 post_log.status = 'failed'
-                post_log.error_message = str(e)
+                if publication_completed:
+                    post_log.error_message = f"SALON BOARDでは公開済みですが保存に失敗: {str(e)}"
+                else:
+                    post_log.error_message = str(e)
+                if publication_result and publication_result.get('screenshot_path'):
+                    post_log.screenshot_path = publication_result.get('screenshot_path', '')
                 post_log.completed_at = timezone.now()
                 post_log.calculate_duration()
                 post_log.save()
@@ -492,7 +531,8 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 logger.error(f"Failed to save to database: {db_error}")
 
             # Retry task if retries available (for recoverable errors)
-            if self.request.retries < self.max_retries:
+            should_retry = (not publication_completed) and (self.request.retries < self.max_retries)
+            if should_retry:
                 try:
                     notifier.send_progress(
                         0,
@@ -504,9 +544,12 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
 
             # Send failure notification after database operations
             try:
+                failure_message = 'SALON BOARDへの投稿に失敗しました'
+                if publication_completed:
+                    failure_message = 'SALON BOARDでは公開済みですが、アプリ側の保存に失敗しました。管理画面で公開済みかご確認ください。'
                 notifier.send_failed(
                     error=str(e),
-                    message='SALON BOARDへの投稿に失敗しました',
+                    message=failure_message,
                     retry_count=self.request.retries
                 )
             except Exception as notif_error:

@@ -124,6 +124,9 @@ def test_fill_content_strategy():
 
         # Mock _upload_single_image
         client._upload_single_image = Mock()
+        client._get_editor_image_count = Mock(return_value=0)
+        client._wait_for_editor_image_count = Mock(return_value=True)
+        client._sync_nicedit_content = Mock()
 
         # Test content with image placeholder
         test_content = "テスト本文です。{{image_1}}画像の後のテキスト。"
@@ -155,40 +158,62 @@ def test_success_detection():
     with patch('apps.blog.salon_board_client.sync_playwright'):
         client = SALONBoardClient()
         client.page = Mock()
+        client.page.url = "https://salonboard.com/blog/complete"
+        client.page.evaluate = Mock()
+
+        zero_locator = Mock()
+        zero_locator.count.return_value = 0
+        back_locator = Mock()
+        back_locator.count.return_value = 0
+
+        def locator_side_effect(selector, *args, **kwargs):
+            if selector == "a#back":
+                return back_locator
+            return zero_locator
+
+        client.page.locator.side_effect = locator_side_effect
 
         # Test Case 1: Success message present
         print("\n  Test Case 1: Success message present")
-        client.page.url = "https://salonboard.com/blog/complete"
         client.page.content.return_value = "<p>ブログの登録が完了しました。</p>"
-
-        mock_locator = Mock()
-        mock_locator.count.return_value = 1
-        client.page.locator.return_value = mock_locator
+        client.page.evaluate.return_value = "ブログの登録が完了しました。"
 
         result = client._check_publication_success("/tmp/screenshot.png")
-        assert result['success'] == True, "Should detect success from message"
+        assert result['success'] is True, "Should detect success from message"
         print("    ✓ Detected success from message")
+
+        # Test Case 1b: Message split across spans (innerText fallback)
+        print("\n  Test Case 1b: Success message split with spans")
+        client.page.content.return_value = "<p><span>ブ</span><span>ログ</span>の登録が完了しました。</p>"
+        client.page.evaluate.return_value = "ブログの登録が完了しました。"
+
+        result = client._check_publication_success("/tmp/screenshot.png")
+        assert result['success'] is True, "Should detect success from normalized text"
+        print("    ✓ Detected success from split message via innerText")
 
         # Test Case 2: Back button present (completion page)
         print("\n  Test Case 2: Back button present")
         client.page.content.return_value = "<div>No success message</div>"
-        mock_locator.count.return_value = 1  # Back button exists
+        client.page.evaluate.return_value = "No success message"
+        back_locator.count.return_value = 1  # Back button exists
 
         result = client._check_publication_success("/tmp/screenshot.png")
-        assert result['success'] == True, "Should detect success from back button"
+        assert result['success'] is True, "Should detect success from back button"
         print("    ✓ Detected success from back button (a#back)")
 
         # Test Case 3: Neither present
         print("\n  Test Case 3: No success indicators")
         client.page.content.return_value = "<div>Error page</div>"
-        mock_locator.count.return_value = 0  # No back button
+        client.page.evaluate.return_value = "Error page"
+        back_locator.count.return_value = 0  # No back button
 
         result = client._check_publication_success("/tmp/screenshot.png")
-        assert result['success'] == False, "Should fail without indicators"
+        assert result['success'] is False, "Should fail without indicators"
         print("    ✓ Correctly fails without indicators")
 
         print("\n✓ Success detection logic is correct")
         print("  - Checks for 'ブログの登録が完了しました'")
+        print("  - Handles span-split messages via innerText")
         print("  - Checks for back button (a#back)")
         return True
 

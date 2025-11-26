@@ -302,11 +302,18 @@ class FormValidator {
 // ========================================
 
 const blogActions = {
+    generateInProgress: false,
+    publishInProgress: false,
+
     async generate(postId) {
+        if (this.generateInProgress) {
+            window.blogWS.showError('AI記事生成は既に進行中です。完了までお待ちください。');
+            return;
+        }
+        this.generateInProgress = true;
         try {
             // Connect WebSocket to post
             window.blogWS.connect(postId);
-            window.blogWS.showProgress('AI記事生成を開始しています（3案作成）...', 0);
             
             const result = await api.post(`/blog/posts/${postId}/generate/`);
             
@@ -320,10 +327,17 @@ const blogActions = {
         } catch (error) {
             window.blogWS.showError('記事生成の開始に失敗しました: ' + error.message);
             throw error;
+        } finally {
+            this.generateInProgress = false;
         }
     },
     
     async publish(postId) {
+        if (this.publishInProgress) {
+            window.blogWS.showError('投稿処理は既に開始されています。完了までお待ちください。');
+            return;
+        }
+        this.publishInProgress = true;
         try {
             // Connect WebSocket to post
             window.blogWS.connect(postId);
@@ -339,6 +353,8 @@ const blogActions = {
         } catch (error) {
             window.blogWS.showError('投稿の開始に失敗しました: ' + error.message);
             throw error;
+        } finally {
+            this.publishInProgress = false;
         }
     },
     
@@ -464,4 +480,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
-

@@ -114,6 +114,9 @@ class BlogWebSocket {
         
         console.log(`[WebSocket] Received: ${type}`, data);
         
+        const taskType = data.task_type || data.taskType || '';
+        const isPublishTask = taskType === 'publish';
+
         switch (type) {
             case 'connection_established':
                 this.emit('connection_established', data);
@@ -121,24 +124,32 @@ class BlogWebSocket {
                 
             case 'task_started':
                 this.emit('task_started', data);
-                this.showProgress(data.message || 'タスクを開始しました', 0);
+                if (isPublishTask) {
+                    this.showProgress(data.message || 'タスクを開始しました', 0);
+                }
                 break;
                 
             case 'task_progress':
                 this.emit('task_progress', data);
-                this.updateProgress(data.progress, data.message);
+                if (isPublishTask) {
+                    this.updateProgress(data.progress, data.message);
+                }
                 break;
                 
             case 'task_completed':
                 this.emit('task_completed', data);
                 this.showSuccess(data.message || '処理が完了しました');
-                this.hideProgress();
+                if (isPublishTask) {
+                    this.hideProgress();
+                }
                 break;
                 
             case 'task_failed':
                 this.emit('task_failed', data);
                 this.showError(data.message || 'エラーが発生しました');
-                this.hideProgress();
+                if (isPublishTask) {
+                    this.hideProgress();
+                }
                 break;
                 
             case 'status_update':
@@ -301,11 +312,13 @@ class BlogWebSocket {
     showProgress(message, percent = 0) {
         const modal = document.getElementById('progress-modal');
         const messageEl = document.getElementById('progress-message');
+        const titleEl = document.getElementById('progress-title');
         const barEl = document.getElementById('progress-bar');
         const percentEl = document.getElementById('progress-percent');
         
         if (modal) {
             modal.classList.remove('hidden');
+            if (titleEl) titleEl.textContent = '処理中';
             if (messageEl) messageEl.textContent = message;
             if (barEl) barEl.style.width = `${percent}%`;
             if (percentEl) percentEl.textContent = `${percent}%`;
@@ -328,15 +341,25 @@ class BlogWebSocket {
     }
 
     /**
-     * Hide progress modal
+     * Hide progress panel
      */
     hideProgress() {
         const modal = document.getElementById('progress-modal');
-        if (modal) {
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 500);
-        }
+        const messageEl = document.getElementById('progress-message');
+        const barEl = document.getElementById('progress-bar');
+        const percentEl = document.getElementById('progress-percent');
+        const titleEl = document.getElementById('progress-title');
+
+        if (!modal) return;
+
+        if (barEl) barEl.style.width = '0%';
+        if (percentEl) percentEl.textContent = '0%';
+        if (messageEl) messageEl.textContent = 'しばらくお待ちください';
+        if (titleEl) titleEl.textContent = '処理中';
+
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
     }
 
     /**
@@ -385,8 +408,26 @@ class BlogWebSocket {
             info: 'text-pink-600'
         };
 
+        const signature = `${type}:${message}`;
+        const existing = Array.from(container.children).find(el => el.dataset.toastKey === signature);
+        if (existing) {
+            // Reset timer by removing and re-adding fade animation
+            existing.style.opacity = '1';
+            existing.style.transform = 'translateX(0)';
+            existing.dataset.toastTimestamp = Date.now();
+            return;
+        }
+
+        // Limit total toasts to avoid stacking
+        const maxToasts = 3;
+        while (container.children.length >= maxToasts) {
+            container.removeChild(container.firstChild);
+        }
+
         const toast = document.createElement('div');
         toast.className = `rounded-lg p-4 border-l-4 shadow-card ${colors[type]} animate-slide-up max-w-sm`;
+        toast.dataset.toastKey = signature;
+        toast.dataset.toastTimestamp = Date.now();
         toast.innerHTML = `
             <div class="flex items-start space-x-3">
                 <svg class="w-5 h-5 ${iconColors[type]} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -430,4 +471,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 30000);
     }
 });
-
