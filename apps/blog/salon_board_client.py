@@ -196,6 +196,7 @@ class SALONBoardClient:
         self.browser = None
         self.context = None
         self.page: Optional[Page] = None
+        self.image_seq = 0  # insertion order tracking for uploaded images
 
     def __enter__(self):
         """Context manager entry"""
@@ -748,8 +749,17 @@ class SALONBoardClient:
         3) それも失敗したら textarea フォールバック
         """
         try:
+            # 画像挿入順トラッキングを初期化
+            self.image_seq = 0
+
             # プレースホルダーで分割
             parts = re.split(r'\{\{image_(\d+)\}\}', content)
+            logger.debug(
+                "[content-fill] parts=%s (len=%s) images=%s",
+                parts,
+                len(parts),
+                image_paths,
+            )
 
             # --- Method 1: nicEditor API ---
             try:
@@ -775,6 +785,11 @@ class SALONBoardClient:
                         if i % 2 == 0:
                             if part.strip():
                                 html_content = part.replace('\\n', '<br>').replace('\\\\', '\\\\\\\\').replace('`', '\\`').replace('${', '\\${')
+                                logger.debug(
+                                    "[content-fill][nicedit-api] text-part index=%s length=%s",
+                                    i,
+                                    len(part),
+                                )
                                 append_script = f"""
                                 (function() {{
                                     try {{
@@ -795,9 +810,12 @@ class SALONBoardClient:
                         else:
                             image_index = int(part) - 1
                             if 0 <= image_index < len(image_paths):
+                                logger.debug("[content-fill][nicedit-api] image placeholder=%s -> file_index=%s path=%s", part, image_index, image_paths[image_index])
                                 self._set_cursor_at_end_nicedit()
                                 self._upload_single_image(image_paths[image_index])
                                 self._set_cursor_at_end_nicedit()
+                                self.image_seq += 1
+                                self._move_new_image_to_end(self.image_seq)
 
                     logger.debug("Content filled using nicEditor API")
                     return
@@ -811,19 +829,28 @@ class SALONBoardClient:
                 editor_div = self.page.locator(Selectors.FORM['editor_div'])
                 if editor_div.count() > 0:
                     editor_div.evaluate("el => el.innerHTML = ''")
+                    logger.debug("[content-fill][contenteditable] cleared editor div")
 
                     for i, part in enumerate(parts):
                         if i % 2 == 0:
                             if part.strip():
                                 html_content = part.replace('\\n', '<br>').replace('`', '\\`').replace('${', '\\${')
+                                logger.debug(
+                                    "[content-fill][contenteditable] text-part index=%s length=%s",
+                                    i,
+                                    len(part),
+                                )
                                 editor_div.evaluate(f"el => el.innerHTML += `{html_content}`")
                                 editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
                         else:
                             image_index = int(part) - 1
                             if 0 <= image_index < len(image_paths):
+                                logger.debug("[content-fill][contenteditable] image placeholder=%s -> file_index=%s path=%s", part, image_index, image_paths[image_index])
                                 editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
                                 self._upload_single_image(image_paths[image_index])
                                 editor_div.evaluate(JS_MOVE_CURSOR_TO_END)
+                                self.image_seq += 1
+                                self._move_new_image_to_end(self.image_seq)
 
                     logger.debug("Content filled using contenteditable div")
                     return
@@ -836,6 +863,40 @@ class SALONBoardClient:
         except Exception as e:
             logger.warning(f"Error filling content in nicEdit: {e}")
             self._fill_content_fallback(content, image_paths)
+
+    def _move_new_image_to_end(self, seq: int) -> None:
+        """Force newly added image (inserted by nicEdit/uploader) to the end of the editor.
+
+        Strategy:
+        - Find images in the editor without data-upload-seq (assumed to be newly inserted)
+        - If found, tag the first one with the given seq and append it to the end of the editor
+        - If none found, append the last image as a fallback
+        """
+        try:
+            result = self.page.evaluate(
+                """
+                (seq) => {
+                    const editor = document.querySelector("div.nicEdit-main[contenteditable='true']")
+                        || document.querySelector("#blogContents")
+                        || document.querySelector("textarea#blogContents");
+                    if (!editor) return { moved: false, reason: 'editor-not-found' };
+
+                    const imgs = Array.from(editor.querySelectorAll('img'));
+                    if (!imgs.length) return { moved: false, reason: 'no-images' };
+
+                    let target = imgs.find(img => !img.dataset.uploadSeq) || imgs[imgs.length - 1];
+                    target.dataset.uploadSeq = String(seq);
+                    editor.appendChild(target);
+
+                    const order = Array.from(editor.querySelectorAll('img')).map(img => img.dataset.uploadSeq || '?');
+                    return { moved: true, order };
+                }
+                """,
+                seq,
+            )
+            logger.debug("[content-fill] moved image seq=%s result=%s", seq, result)
+        except Exception as e:
+            logger.warning("[content-fill] failed to move new image to end: %s", e)
 
     def _upload_single_image(self, image_path: str) -> bool:
         """
@@ -850,6 +911,7 @@ class SALONBoardClient:
             upload_btn = Selectors.IMAGE['trigger_btn']
             if self.page.locator(upload_btn).count() == 0:
                 raise UploadError("Upload button not found")
+            logger.debug("[image-upload] opening modal via %s", upload_btn)
 
             self.page.click(upload_btn)
             self.page.wait_for_timeout(500)
@@ -857,18 +919,21 @@ class SALONBoardClient:
             file_input = Selectors.IMAGE['file_input']
             if self.page.locator(file_input).count() == 0:
                 raise UploadError("File input not found")
+            logger.debug("[image-upload] setting file %s", image_path)
 
             self.page.set_input_files(file_input, image_path)
 
             thumbnail = Selectors.IMAGE['thumbnail']
             try:
                 self.page.wait_for_selector(thumbnail, timeout=10000)
+                logger.debug("[image-upload] thumbnail appeared for %s", image_path)
             except PlaywrightTimeoutError:
                 raise UploadError("Thumbnail did not appear - upload may have failed")
 
             submit_btn = Selectors.IMAGE['submit_btn']
             try:
                 self.page.wait_for_selector(submit_btn, timeout=5000)
+                logger.debug("[image-upload] submit active, clicking for %s", image_path)
                 self.page.click(submit_btn)
             except PlaywrightTimeoutError:
                 raise UploadError("Submit button did not become active")
@@ -876,6 +941,7 @@ class SALONBoardClient:
             modal = Selectors.IMAGE['modal']
             try:
                 self.page.wait_for_selector(modal, state="hidden", timeout=10000)
+                logger.debug("[image-upload] modal closed for %s", image_path)
             except PlaywrightTimeoutError:
                 logger.warning("Modal did not close, continuing anyway")
 
