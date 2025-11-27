@@ -11,8 +11,12 @@ from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 import requests
 from urllib.parse import urljoin
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+STYLIST_CACHE_TIMEOUT = 60 * 60 * 6  # 6 hours
+COUPON_CACHE_TIMEOUT = 60 * 60 * 6   # 6 hours
 
 
 class HPBScraper:
@@ -359,9 +363,17 @@ def scrape_stylists(salon_url: str) -> List[Dict[str, str]]:
             ...
         ]
     """
+    cache_key = f"hpb:stylists:{salon_url.rstrip('/')}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"Using cached stylists for {salon_url}")
+        return cached
+
     scraper = HPBScraper()
     try:
-        return scraper.scrape_stylists(salon_url)
+        stylists = scraper.scrape_stylists(salon_url)
+        cache.set(cache_key, stylists, timeout=STYLIST_CACHE_TIMEOUT)
+        return stylists
     finally:
         scraper.close()
 
@@ -376,8 +388,16 @@ def scrape_coupons(salon_url: str) -> List[str]:
     Returns:
         List of coupon names (strings)
     """
+    cache_key = f"hpb:coupons:{salon_url.rstrip('/')}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"Using cached coupons for {salon_url}")
+        return cached
+
     scraper = HPBScraper()
     try:
-        return scraper.scrape_coupons(salon_url)
+        coupons = scraper.scrape_coupons(salon_url)
+        cache.set(cache_key, coupons, timeout=COUPON_CACHE_TIMEOUT)
+        return coupons
     finally:
         scraper.close()
