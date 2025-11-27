@@ -91,6 +91,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
         keywords = (post.keywords or '').strip()
         custom_prompt = (post.ai_prompt or '').strip()
         image_paths = [img.file_path for img in post.images.all().order_by('order')]
+        current_year = timezone.now().year
 
         # Check if keywords exist (required)
         if not keywords:
@@ -131,6 +132,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 【要件】
 - 美容サロンのお客様向けに親しみやすく読みやすい記事にする
 - タイトルは25文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
+- 可能であれば「{current_year}年版」を自然に含める
 - 本文は500〜600文字程度（最大1000文字厳守）
 - {guidance}
 - 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
@@ -151,6 +153,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 【要件】
 - 美容サロンのお客様向けに親しみやすく読みやすい記事にする
 - タイトルは25文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
+- 可能であれば「{current_year}年版」を自然に含める
 - 本文は500〜600文字程度（最大1000文字厳守）
 - {guidance}
 - 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
