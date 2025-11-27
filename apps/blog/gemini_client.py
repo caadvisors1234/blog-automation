@@ -6,7 +6,9 @@ Google Gemini AI client for content generation
 import logging
 import json
 import re
-from typing import Optional, Dict, Any
+import mimetypes
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 from django.conf import settings
 from google import genai
 from google.genai import types
@@ -173,6 +175,7 @@ class GeminiClient:
         prompt: str,
         num_variations: int = 3,
         image_count: int = 0,
+        image_paths: Optional[List[str]] = None,
         temperature: float = 0.9,
         max_output_tokens: int = 8192,
     ) -> Dict[str, Any]:
@@ -183,6 +186,7 @@ class GeminiClient:
             prompt: User's content generation prompt
             num_variations: Number of variations to generate (default: 3)
             image_count: Number of images to include placeholders for (default: 0)
+            image_paths: Optional list of image file paths to include as context
             temperature: Creativity level (0.0-1.0), higher for more variety
             max_output_tokens: Maximum length of generated content
             
@@ -214,8 +218,9 @@ class GeminiClient:
 ユーザーからのリクエストに基づいて、{num_variations}種類の異なる魅力的なブログ記事を作成してください。
 
 各記事の要件：
-- タイトルは25文字以内で、興味を引くものにする
-- 本文は600-800文字程度
+- タイトルは25文字以内で、クリックを誘うワード（例: 失敗しない/〇選/人気/最新版/簡単 等）を1つ以上入れる
+- 本文は500-600文字程度（最大1000文字厳守）
+- How to/ポイント解説系かスタイルまとめ系のいずれかに適切に振り分け、読者が実行しやすい・イメージしやすい構成にする
 - 読みやすい段落構成（適切に改行を入れる）
 - 専門用語は適度に説明を加える
 - ポジティブで親しみやすいトーン
@@ -247,9 +252,32 @@ class GeminiClient:
 
             logger.info(f"Generating {num_variations} content variations with Gemini (images: {image_count}) for prompt: {prompt[:100]}...")
 
+            # Build contents with optional image parts
+            contents: List[Any] = [prompt]
+
+            if image_paths:
+                for idx, image_path in enumerate(image_paths, start=1):
+                    try:
+                        data = Path(image_path).read_bytes()
+                        mime_type, _ = mimetypes.guess_type(image_path)
+                        mime_type = mime_type or 'image/jpeg'
+
+                        contents.append(
+                            types.Part.from_bytes(
+                                data=data,
+                                mime_type=mime_type,
+                            )
+                        )
+                        # Provide lightweight text context for the image order/name
+                        contents.append(f"Image {idx}: {Path(image_path).name}")
+                    except Exception as img_err:
+                        logger.warning(f"Failed to attach image {image_path}: {img_err}")
+
+                logger.info(f"Attached {len(contents) - 1} content parts to Gemini (including images).")
+
             response = self.client.models.generate_content(
                 model=self.model_id,
-                contents=prompt,
+                contents=contents if len(contents) > 1 else prompt,
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     max_output_tokens=max_output_tokens,

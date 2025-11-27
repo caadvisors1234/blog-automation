@@ -11,6 +11,7 @@ All tasks support WebSocket progress notifications via Django Channels.
 """
 
 import logging
+import os
 from celery import shared_task
 from django.utils import timezone
 from django.db import IntegrityError
@@ -89,6 +90,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 
         keywords = (post.keywords or '').strip()
         custom_prompt = (post.ai_prompt or '').strip()
+        image_paths = [img.file_path for img in post.images.all().order_by('order')]
 
         # Check if keywords exist (required)
         if not keywords:
@@ -109,6 +111,17 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
         # Build prompt (respect user-specified prompt if any)
         image_count = post.images.count()
 
+        click_words = "失敗しない,〇選,人気,最新版,簡単"
+        guidance = """記事タイプを判断して執筆すること：
+- How to/ポイント解説系: 手順やコツを整理し、読者がすぐ実践できる形にする
+- スタイルまとめ系: トレンドやデザイン例を複数提示し、雰囲気が伝わるようにする"""
+
+        image_filenames_text = ""
+        if image_paths:
+            image_filenames_text = "【アップロード画像（順番はimage_1, image_2...に対応）】\n" + "\n".join(
+                [f"{idx+1}. {os.path.basename(path)}" for idx, path in enumerate(image_paths)]
+            )
+
         if custom_prompt:
             full_prompt = f"""{custom_prompt}
 
@@ -117,10 +130,12 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 
 【要件】
 - 美容サロンのお客様向けに親しみやすく読みやすい記事にする
-- タイトルは25文字以内で魅力的に
+- タイトルは25文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
 - 本文は500〜600文字程度（最大1000文字厳守）
-- キーワードを自然に含める
-- 読者が行動したくなるような内容に
+- {guidance}
+- 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
+- キーワードを自然に含め、読者が行動したくなるように導く
+{image_filenames_text}
 
 【重要な制約】
 - マークダウン記法は一切使用禁止（**太字**、*斜体*、#見出し、- リスト、[]()リンクなど）
@@ -135,10 +150,12 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 
 【要件】
 - 美容サロンのお客様向けに親しみやすく読みやすい記事にする
-- タイトルは25文字以内で魅力的に
+- タイトルは25文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
 - 本文は500〜600文字程度（最大1000文字厳守）
-- キーワードを自然に含める
-- 読者が行動したくなるような内容に
+- {guidance}
+- 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
+- キーワードを自然に含め、読者が行動したくなるように導く
+{image_filenames_text}
 
 【重要な制約】
 - マークダウン記法は一切使用禁止（**太字**、*斜体*、#見出し、- リスト、[]()リンクなど）
@@ -164,6 +181,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
                 prompt=full_prompt,
                 num_variations=3,
                 image_count=image_count,
+                image_paths=image_paths,
             )
 
             notifier.send_progress(80, "生成完了。データベースを更新中...")
