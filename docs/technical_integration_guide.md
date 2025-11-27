@@ -728,7 +728,6 @@ def create_and_post_blog(request):
     from apps.blog.ai_generator import generate_blog_content
     content = generate_blog_content(
         keywords=data.get('keywords'),
-        tone=data.get('tone'),
         image_count=len(data.get('images', []))
     )
 
@@ -1346,7 +1345,7 @@ def generate_blog_content_task(self, post_id: int):
         image_count = post.images.count()
 
         full_prompt = f"""キーワード: {post.keywords}
-トーン: {post.tone or 'friendly'}"""
+トーン: 親しみやすく読みやすい記事にしてください"""
 
         # 3. AI生成（3案）
         send_progress(user_id, task_id, 'generating', 30, 'AIが3つの記事案を生成中...')
@@ -1577,7 +1576,6 @@ from apps.blog.ai_generator import generate_blog_content
 def test_generate_blog_content():
     result = generate_blog_content(
         keywords="カット カラー",
-        tone="親しみやすい",
         image_count=2
     )
 

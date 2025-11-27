@@ -464,13 +464,12 @@ from config.settings import MEDIA_ROOT
 
 ### 7.2 docstring
 ```python
-def generate_blog_content(keywords: str, tone: str, image_count: int) -> dict:
+def generate_blog_content(keywords: str, image_count: int) -> dict:
     """
     Gemini APIを使用してブログコンテンツを生成する
 
     Args:
         keywords (str): キーワード
-        tone (str): トーン＆マナー
         image_count (int): 画像枚数
 
     Returns:

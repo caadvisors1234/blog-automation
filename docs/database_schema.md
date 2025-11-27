@@ -34,7 +34,6 @@ erDiagram
         string title "max 25 chars"
         text content
         text generated_content
-        string tone
         string keywords
         string stylist_id
         string coupon_name
@@ -187,7 +186,6 @@ class BlogPost(models.Model):
 
     # AI generation
     ai_prompt = models.TextField(blank=True)
-    tone = models.CharField(max_length=50, blank=True)
     keywords = models.CharField(max_length=200, blank=True)
     ai_generated = models.BooleanField(default=False)
 
@@ -225,7 +223,6 @@ class BlogPost(models.Model):
 | content | TEXT | DEFAULT '' | 本文 |
 | generated_content | TEXT | | AI生成元本文（バックアップ） |
 | generated_variations | JSONB | DEFAULT [] | AI生成した3案のバリエーション |
-| tone | VARCHAR(50) | | トーン |
 | keywords | VARCHAR(200) | | キーワード |
 | ai_prompt | TEXT | | AIプロンプト |
 | ai_generated | BOOLEAN | DEFAULT FALSE | AI生成フラグ |

@@ -468,19 +468,6 @@ Django Template + Tailwind CSSによるサーバーサイドレンダリング�
                 </p>
             </div>
 
-            <!-- トーン -->
-            <div>
-                <label for="tone" class="block text-sm font-medium text-gray-700">
-                    トーン＆マナー <span class="text-red-500">*</span>
-                </label>
-                <select name="tone" id="tone" required
-                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                    {% for value, label in tone_choices %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
             <!-- 画像アップロード -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">

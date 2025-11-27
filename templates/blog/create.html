@@ -37,18 +37,6 @@
                     <p class="text-caption text-gray-400 mt-1.5">カンマ区切りで複数指定できます。AIがこのキーワードとアップロードした画像をもとにタイトルと記事を自動生成します。</p>
                 </div>
                 
-                <!-- Tone -->
-                <div>
-                    <label for="tone" class="block text-body font-medium text-gray-700 mb-2">
-                        文章のトーン
-                    </label>
-                    <select id="tone" name="tone">
-                        {% for value, label in tone_choices %}
-                        <option value="{{ value }}">{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
                 <!-- AI Prompt (Optional) -->
                 <div>
                     <label for="ai_prompt" class="block text-body font-medium text-gray-700 mb-2">
@@ -275,12 +263,11 @@
             // Add CSRF token
             const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]');
             if (csrfToken) {
-                formData.append('csrfmiddlewaretoken', csrfToken.value);
+            formData.append('csrfmiddlewaretoken', csrfToken.value);
             }
             
             // Add form fields
             formData.append('keywords', form.querySelector('#keywords').value);
-            formData.append('tone', form.querySelector('#tone').value);
             formData.append('ai_prompt', form.querySelector('#ai_prompt').value || '');
             formData.append('stylist_id', form.querySelector('#stylist_id')?.value || '');
             formData.append('coupon_name', form.querySelector('#coupon_name')?.value || '');

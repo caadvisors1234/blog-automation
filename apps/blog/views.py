@@ -439,7 +439,6 @@ def post_create(request):
         # Handle form submission
         keywords = (request.POST.get('keywords') or '').strip()
         ai_prompt = (request.POST.get('ai_prompt') or '').strip()
-        tone = request.POST.get('tone', 'friendly')
         stylist_id = request.POST.get('stylist_id', '')
         coupon_name = request.POST.get('coupon_name', '')
         template_id = request.POST.get('template_id', '')
@@ -473,7 +472,6 @@ def post_create(request):
             title='',  # AI will generate
             ai_prompt=ai_prompt,  # Optional: user can provide custom instructions
             keywords=keywords,
-            tone=tone,
             stylist_id=stylist_id,
             coupon_name=coupon_name,
             status='generating',  # Start with generating status
@@ -514,12 +512,6 @@ def post_create(request):
     context = {
         'stylists': stylists,
         'coupons': coupons,
-        'tone_choices': [
-            ('friendly', 'フレンドリー'),
-            ('professional', 'プロフェッショナル'),
-            ('casual', 'カジュアル'),
-            ('formal', 'フォーマル'),
-        ],
         'templates': templates,
     }
 

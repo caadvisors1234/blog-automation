@@ -89,7 +89,6 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 
         keywords = (post.keywords or '').strip()
         custom_prompt = (post.ai_prompt or '').strip()
-        tone = (post.tone or '').strip()
 
         # Check if keywords exist (required)
         if not keywords:
@@ -113,26 +112,29 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
         if custom_prompt:
             full_prompt = f"""{custom_prompt}
 
-【重要な制約】
-- タイトルは25文字以内
+【キーワード】
+{keywords}
+
+【要件】
+- 美容サロンのお客様向けに親しみやすく読みやすい記事にする
+- タイトルは25文字以内で魅力的に
 - 本文は500〜600文字程度（最大1000文字厳守）
+- キーワードを自然に含める
+- 読者が行動したくなるような内容に
+
+【重要な制約】
 - マークダウン記法は一切使用禁止（**太字**、*斜体*、#見出し、- リスト、[]()リンクなど）
-- プレーンテキストのみで記述"""
-            if tone:
-                full_prompt = f"トーン: {tone}\n\n{full_prompt}"
-            if keywords:
-                full_prompt = f"キーワード: {keywords}\n\n{full_prompt}"
+- プレーンテキストのみで記述
+- 改行や段落分けは通常の改行のみ使用
+- 記号による装飾は使わない"""
         else:
             full_prompt = f"""以下のキーワードに基づいて、美容サロンのブログ記事を作成してください。
 
 【キーワード】
 {keywords}
 
-【トーン】
-{tone or 'friendly'}
-
 【要件】
-- 美容サロンのお客様向けの親しみやすい記事を作成
+- 美容サロンのお客様向けに親しみやすく読みやすい記事にする
 - タイトルは25文字以内で魅力的に
 - 本文は500〜600文字程度（最大1000文字厳守）
 - キーワードを自然に含める
@@ -647,4 +649,3 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                 logger.error(f"Failed to send notification: {notif_error}")
 
         return {'success': False, 'error': str(e)}
-

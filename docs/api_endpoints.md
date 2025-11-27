@@ -195,7 +195,6 @@ SALON BOARDアカウントを削除
 title: ブログタイトル（25文字以内）
 content: 本文
 ai_prompt: AIプロンプト
-tone: friendly
 keywords: カット カラー
 stylist_id: T000123456
 coupon_name: カット＋カラー
@@ -209,7 +208,6 @@ images[]: (File) image2.jpg
   "title": "ブログタイトル",
   "content": "本文",
   "ai_prompt": "AIプロンプト",
-  "tone": "friendly",
   "keywords": "カット カラー",
   "stylist_id": "T000123456",
   "coupon_name": "カット＋カラー"
@@ -243,7 +241,6 @@ images[]: (File) image2.jpg
   "generated_content": "AI生成元本文",
   "status": "ready",
   "ai_prompt": "AIプロンプト",
-  "tone": "friendly",
   "keywords": "カット カラー",
   "ai_generated": true,
   "stylist_id": "T000123456",

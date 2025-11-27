@@ -67,12 +67,6 @@ class BlogPost(models.Model):
         verbose_name='AI Prompt',
         help_text='Prompt sent to Gemini'
     )
-    tone = models.CharField(
-        max_length=50,
-        blank=True,
-        verbose_name='Tone',
-        help_text='Tone and manner for content generation'
-    )
     keywords = models.CharField(
         max_length=200,
         blank=True,

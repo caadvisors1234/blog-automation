@@ -62,7 +62,7 @@ class BlogPostAdmin(admin.ModelAdmin):
             'fields': ('id', 'user', 'title', 'content', 'status')
         }),
         ('AI Generation', {
-            'fields': ('ai_prompt', 'tone', 'keywords', 'ai_generated', 'generated_content')
+            'fields': ('ai_prompt', 'keywords', 'ai_generated', 'generated_content')
         }),
         ('SALON BOARD Parameters', {
             'fields': ('stylist_id', 'coupon_name')
