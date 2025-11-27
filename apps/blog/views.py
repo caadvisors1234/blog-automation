@@ -576,6 +576,41 @@ def post_select(request, pk):
 
 
 @login_required
+def post_regenerate(request, pk):
+    """
+    Retry AI generation from the selection screen without recreating the post.
+    """
+    if request.method != 'POST':
+        return redirect('blog:post_select', pk=pk)
+
+    post = get_object_or_404(BlogPost, pk=pk, user=request.user)
+
+    if post.status not in ['selecting', 'failed', 'draft']:
+        messages.error(request, 'AI生成をやり直せる状態ではありません。')
+        return redirect('blog:post_detail', pk=post.pk)
+
+    if not (post.keywords or '').strip():
+        messages.error(request, 'キーワードが設定されていないため再生成できません。新規作成からやり直してください。')
+        return redirect('blog:post_detail', pk=post.pk)
+
+    logger.info(f"Retrying AI generation for post {post.id}")
+
+    post.generated_variations = []
+    post.ai_generated = False
+    post.status = 'generating'
+    post.save(update_fields=['generated_variations', 'ai_generated', 'status'])
+
+    from .tasks import generate_blog_content_task
+
+    task = generate_blog_content_task.delay(post.id)
+    post.celery_task_id = task.id
+    post.save(update_fields=['celery_task_id'])
+
+    messages.info(request, 'AIが記事を再生成しています。進捗画面へ移動します。')
+    return redirect('blog:post_generating', pk=post.pk)
+
+
+@login_required
 def post_select_confirm(request, pk):
     """
     Confirm article selection.

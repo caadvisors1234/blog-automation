@@ -82,25 +82,29 @@
         {% endfor %}
     </div>
     
-    <!-- Action Button -->
-    <form method="post" action="{% url 'blog:post_select_confirm' pk=post.pk %}" id="select-form">
+    <!-- Hidden forms for actions -->
+    <form method="post" action="{% url 'blog:post_regenerate' pk=post.pk %}" id="regenerate-form" class="hidden">
+        {% csrf_token %}
+    </form>
+    <form method="post" action="{% url 'blog:post_select_confirm' pk=post.pk %}" id="select-form" class="hidden">
         {% csrf_token %}
         <input type="hidden" name="variation_id" id="selected-variation-id" value="">
-        
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 py-6 border-t border-gray-200">
-            <div class="text-body text-gray-600">
-                <span id="selection-status" class="text-gray-400">記事を選択してください</span>
-            </div>
-            <div class="flex gap-4">
-                <a href="{% url 'blog:post_create' %}" class="btn btn-secondary">
-                    やり直す
-                </a>
-                <button type="submit" class="btn btn-primary" id="confirm-btn" disabled>
-                    この記事を使う
-                </button>
-            </div>
-        </div>
     </form>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 py-6 border-t border-gray-200">
+        <div class="text-body text-gray-600">
+            <span id="selection-status" class="text-gray-400">記事を選択してください</span>
+        </div>
+        <div class="flex gap-4">
+            <button type="submit" form="regenerate-form" class="btn btn-secondary">
+                やり直す
+            </button>
+            <button type="submit" form="select-form" class="btn btn-primary" id="confirm-btn" disabled>
+                この記事を使う
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Full Preview Modal -->
@@ -213,4 +217,3 @@
     });
 </script>
 {% endblock %}
-
