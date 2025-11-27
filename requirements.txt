@@ -21,6 +21,7 @@ django-celery-beat==2.6.0
 supabase==2.24.0
 PyJWT>=2.10.1
 cryptography==41.0.7
+django-ratelimit==4.1.0
 
 # AI & Scraping
 google-genai==0.2.2

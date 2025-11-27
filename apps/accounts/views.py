@@ -124,43 +124,200 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from django_ratelimit.decorators import ratelimit
+from .utils import verify_supabase_token
+from .models import LoginAttempt
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def get_client_ip(request):
+    """Get the client IP address from the request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
 
 
 def login_view(request):
     """
     Login view.
-    
-    Note: Actual authentication is handled by Supabase on the frontend.
-    This view handles the redirect after Supabase authentication.
+
+    Displays the login form. Authentication is handled by Supabase on the frontend.
     """
     if request.user.is_authenticated:
         return redirect('core:dashboard')
-    
-    # For demo/development, allow simple login
-    if request.method == 'POST':
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        
-        # Try to find user by email first
+
+    from django.conf import settings
+
+    context = {
+        'SUPABASE_URL': settings.SUPABASE_URL,
+        'SUPABASE_KEY': settings.SUPABASE_KEY,
+    }
+
+    return render(request, 'accounts/login.html', context)
+
+
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
+@require_POST
+def supabase_login_view(request):
+    """
+    Handle Supabase authentication and create Django session.
+
+    This endpoint receives a Supabase JWT access token from the frontend,
+    verifies it, and creates a Django session for the authenticated user.
+
+    Args:
+        request: HTTP request with JSON body containing:
+            - access_token: Supabase JWT access token
+            - remember: Boolean for session persistence
+
+    Returns:
+        JSON response with redirect URL or error message
+    """
+    # Get client information
+    ip_address = get_client_ip(request)
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+    try:
+        # Parse request body
+        data = json.loads(request.body)
+        access_token = data.get('access_token')
+        remember = data.get('remember', False)
+
+        logger.info(f'Supabase login attempt from IP {ip_address} - Token length: {len(access_token) if access_token else 0}')
+
+        if not access_token:
+            logger.warning('Supabase login failed: No access token provided')
+            return JsonResponse(
+                {'error': 'アクセストークンが必要です'},
+                status=400
+            )
+
+        # Verify Supabase JWT token
+        logger.debug(f'Verifying JWT token: {access_token[:50]}...')
+        payload = verify_supabase_token(access_token)
+
+        if not payload:
+            logger.error(f'JWT token verification failed for token: {access_token[:50]}...')
+            # Record failed login attempt
+            email = payload.get('email', 'unknown') if payload else 'unknown'
+            LoginAttempt.objects.create(
+                email=email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                success=False,
+                failure_reason='JWT token verification failed'
+            )
+            return JsonResponse(
+                {'error': 'トークンの検証に失敗しました'},
+                status=401
+            )
+
+        logger.info(f'JWT token verified successfully. Payload: {payload}')
+
+        # Extract user information from token
+        supabase_user_id = payload.get('sub')
+        email = payload.get('email')
+
+        if not supabase_user_id:
+            return JsonResponse(
+                {'error': 'トークンにユーザー情報が含まれていません'},
+                status=400
+            )
+
+        # Get or create user
         try:
-            user_obj = User.objects.get(email=email)
-            username = user_obj.username
+            user = User.objects.get(supabase_user_id=supabase_user_id)
+            logger.info(f'Existing user logged in: {user.username} (supabase_id: {supabase_user_id})')
         except User.DoesNotExist:
-            username = email  # Fall back to using email as username
-        
-        # Try to authenticate
-        from django.contrib.auth import authenticate
-        user = authenticate(request, username=username, password=password)
-        
-        if user is not None:
-            auth_login(request, user)
-            messages.success(request, 'ログインしました')
-            next_url = request.GET.get('next', 'core:dashboard')
-            return redirect(next_url)
+            # Create new user from Supabase data
+            username = email.split('@')[0] if email else f'user_{supabase_user_id[:8]}'
+
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f'{base_username}{counter}'
+                counter += 1
+
+            user = User.objects.create(
+                username=username,
+                email=email or '',
+                supabase_user_id=supabase_user_id
+            )
+            logger.info(f'New user created: {user.username} (supabase_id: {supabase_user_id})')
+
+        # Log the user in (create Django session)
+        auth_login(request, user, backend='apps.accounts.backends.SupabaseAuthBackend')
+
+        # Configure session expiry based on remember option
+        if not remember:
+            # Session expires when browser closes
+            request.session.set_expiry(0)
         else:
-            messages.error(request, 'メールアドレスまたはパスワードが正しくありません')
-    
-    return render(request, 'accounts/login.html')
+            # Session lasts for 2 weeks
+            request.session.set_expiry(1209600)  # 14 days in seconds
+
+        logger.info(f'Django session created for user: {user.username}')
+
+        # Record successful login attempt
+        LoginAttempt.objects.create(
+            user=user,
+            email=email or '',
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=True
+        )
+
+        return JsonResponse({
+            'success': True,
+            'redirect_url': '/',  # Dashboard is at root URL
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            }
+        })
+
+    except json.JSONDecodeError:
+        # Record failed login attempt
+        LoginAttempt.objects.create(
+            email='unknown',
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=False,
+            failure_reason='Invalid JSON format'
+        )
+        return JsonResponse(
+            {'error': 'リクエストの形式が正しくありません'},
+            status=400
+        )
+    except Exception as e:
+        logger.error(f'Login error: {str(e)}', exc_info=True)
+        # Record failed login attempt
+        try:
+            email_addr = payload.get('email', 'unknown') if 'payload' in locals() else 'unknown'
+        except:
+            email_addr = 'unknown'
+        LoginAttempt.objects.create(
+            email=email_addr,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=False,
+            failure_reason=f'Exception: {str(e)[:200]}'
+        )
+        return JsonResponse(
+            {'error': 'ログイン処理中にエラーが発生しました'},
+            status=500
+        )
 
 
 def logout_view(request):

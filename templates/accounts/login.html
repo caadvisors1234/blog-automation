@@ -15,12 +15,22 @@
             <h1 class="text-display text-gray-900">ログイン</h1>
             <p class="text-body text-gray-500 mt-2">アカウントにサインインしてください</p>
         </div>
-        
+
+        <!-- Error Message -->
+        <div id="error-message" class="hidden mb-6 p-4 rounded-lg bg-red-50 border border-red-200">
+            <div class="flex items-start space-x-3">
+                <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-body text-red-700" id="error-text"></p>
+            </div>
+        </div>
+
         <!-- Login Form -->
         <div class="card">
-            <form method="post" class="space-y-6">
+            <form id="login-form" class="space-y-6">
                 {% csrf_token %}
-                
+
                 <div>
                     <label for="email" class="block text-body font-medium text-gray-700 mb-2">
                         メールアドレス
@@ -29,7 +39,7 @@
                            autocomplete="email"
                            placeholder="your@email.com">
                 </div>
-                
+
                 <div>
                     <label for="password" class="block text-body font-medium text-gray-700 mb-2">
                         パスワード
@@ -38,21 +48,21 @@
                            autocomplete="current-password"
                            placeholder="••••••••">
                 </div>
-                
+
                 <div class="flex items-center justify-between">
                     <label class="flex items-center space-x-2 cursor-pointer">
-                        <input type="checkbox" name="remember" 
+                        <input type="checkbox" id="remember" name="remember"
                                class="w-4 h-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500">
                         <span class="text-body text-gray-600">ログイン状態を保持</span>
                     </label>
                 </div>
-                
-                <button type="submit" class="btn btn-primary w-full">
+
+                <button type="submit" id="login-button" class="btn btn-primary w-full">
                     ログイン
                 </button>
             </form>
         </div>
-        
+
         <!-- Footer -->
         <p class="text-center text-caption text-gray-500 mt-8">
             アカウントをお持ちでない場合は
@@ -61,4 +71,135 @@
         </p>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Supabase client
+        const supabaseUrl = '{{ SUPABASE_URL }}';
+        const supabaseKey = '{{ SUPABASE_KEY }}';
+
+        if (!supabaseUrl || !supabaseKey || supabaseUrl === '' || supabaseKey === '') {
+            console.error('Supabase credentials not configured');
+            showError('システム設定エラー。管理者に連絡してください。');
+            return;
+        }
+
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        const form = document.getElementById('login-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const rememberCheckbox = document.getElementById('remember');
+        const loginButton = document.getElementById('login-button');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+
+        // Show error message
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        // Hide error message
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        // Handle form submission
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            hideError();
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            const remember = rememberCheckbox.checked;
+
+            // Disable button during authentication
+            loginButton.disabled = true;
+            loginButton.textContent = 'ログイン中...';
+
+            try {
+                // Authenticate with Supabase
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) {
+                    throw error;
+                }
+
+                if (!data.session) {
+                    throw new Error('セッションの作成に失敗しました');
+                }
+
+                // Get JWT access token
+                const accessToken = data.session.access_token;
+
+                // Log token info for debugging
+                console.log('Supabase authentication successful');
+                console.log('Token length:', accessToken.length);
+                console.log('Token (first 50 chars):', accessToken.substring(0, 50));
+
+                // Decode JWT header to check algorithm (without verification)
+                try {
+                    const tokenParts = accessToken.split('.');
+                    const header = JSON.parse(atob(tokenParts[0]));
+                    console.log('JWT algorithm:', header.alg);
+                    console.log('JWT header:', header);
+                } catch (e) {
+                    console.warn('Could not decode JWT header:', e);
+                }
+
+                // Send token to Django backend to create session
+                const response = await fetch('{% url "accounts:supabase_login" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        access_token: accessToken,
+                        remember: remember
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'ログインに失敗しました');
+                }
+
+                // Redirect to dashboard or next URL
+                const nextUrl = new URLSearchParams(window.location.search).get('next') || result.redirect_url || '{% url "core:dashboard" %}';
+                window.location.href = nextUrl;
+
+            } catch (error) {
+                console.error('Login error:', error);
+
+                // User-friendly error messages
+                let errorMsg = 'ログインに失敗しました';
+
+                if (error.message.includes('Invalid login credentials')) {
+                    errorMsg = 'メールアドレスまたはパスワードが正しくありません';
+                } else if (error.message.includes('Email not confirmed')) {
+                    errorMsg = 'メールアドレスが確認されていません';
+                } else if (error.message.includes('User not found')) {
+                    errorMsg = 'アカウントが見つかりません。管理者に連絡してください。';
+                } else if (error.message) {
+                    errorMsg = error.message;
+                }
+
+                showError(errorMsg);
+
+                // Re-enable button
+                loginButton.disabled = false;
+                loginButton.textContent = 'ログイン';
+            }
+        });
+    });
+</script>
 {% endblock %}

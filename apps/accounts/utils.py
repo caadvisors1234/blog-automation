@@ -4,9 +4,12 @@ Supabase authentication utilities
 """
 
 import jwt
+import logging
 from django.conf import settings
 from supabase import create_client, Client
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def get_supabase_client() -> Client:
@@ -40,7 +43,11 @@ def verify_supabase_token(token: str) -> Optional[Dict[str, Any]]:
         Decoded token payload if valid, None otherwise
     """
     try:
+        logger.debug(f'Attempting to verify JWT token with secret length: {len(settings.SUPABASE_JWT_SECRET)}')
+
         # Decode and verify JWT token
+        # Note: We don't verify 'aud' (audience) because Supabase tokens have 'aud': 'authenticated'
+        # which is expected for user tokens, but PyJWT requires exact match if we verify it.
         payload = jwt.decode(
             token,
             settings.SUPABASE_JWT_SECRET,
@@ -49,14 +56,19 @@ def verify_supabase_token(token: str) -> Optional[Dict[str, Any]]:
                 'verify_signature': True,
                 'verify_exp': True,
                 'verify_iat': True,
+                'verify_aud': False,  # Don't verify audience claim
             }
         )
+        logger.info(f'JWT token verified successfully. User ID: {payload.get("sub")}, Email: {payload.get("email")}')
         return payload
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        logger.error(f'JWT token expired: {str(e)}')
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.error(f'Invalid JWT token: {str(e)}')
         return None
-    except Exception:
+    except Exception as e:
+        logger.error(f'Unexpected error verifying JWT token: {str(e)}', exc_info=True)
         return None
 
 

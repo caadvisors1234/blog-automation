@@ -77,3 +77,62 @@ class User(AbstractUser):
         if match:
             return match.group(1)
         return ''
+
+
+class LoginAttempt(models.Model):
+    """
+    Model to track login attempts for security auditing
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='login_attempts',
+        verbose_name='User',
+        help_text='User who attempted to login (null if user not found)'
+    )
+    email = models.EmailField(
+        verbose_name='Email',
+        help_text='Email address used for login attempt'
+    )
+    ip_address = models.GenericIPAddressField(
+        verbose_name='IP Address',
+        help_text='IP address from which the login was attempted'
+    )
+    user_agent = models.TextField(
+        blank=True,
+        verbose_name='User Agent',
+        help_text='Browser user agent string'
+    )
+    success = models.BooleanField(
+        verbose_name='Success',
+        help_text='Whether the login attempt was successful'
+    )
+    failure_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Failure Reason',
+        help_text='Reason for login failure (if applicable)'
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name='Timestamp'
+    )
+
+    class Meta:
+        verbose_name = 'Login Attempt'
+        verbose_name_plural = 'Login Attempts'
+        db_table = 'accounts_login_attempt'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['email', '-timestamp']),
+            models.Index(fields=['ip_address', '-timestamp']),
+            models.Index(fields=['success', '-timestamp']),
+            models.Index(fields=['-timestamp']),
+        ]
+
+    def __str__(self):
+        status = 'Success' if self.success else 'Failed'
+        return f'{status} - {self.email} at {self.timestamp}'
