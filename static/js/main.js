@@ -24,6 +24,19 @@ function getCSRFToken() {
 // API Helper
 // ========================================
 
+function redirectToLoginIfNeeded(response) {
+    if (response && response.status === 401) {
+        // Avoid redirect loop when already on login page
+        if (window.location.pathname.startsWith('/accounts/login')) {
+            return;
+        }
+        const next = encodeURIComponent(
+            window.location.pathname + window.location.search + window.location.hash
+        );
+        window.location.href = `/accounts/login/?next=${next}`;
+    }
+}
+
 const api = {
     baseUrl: '/api',
     
@@ -40,6 +53,10 @@ const api = {
                 ...options,
                 headers
             });
+
+            if (response.status === 401) {
+                redirectToLoginIfNeeded(response);
+            }
             
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
@@ -87,6 +104,10 @@ const api = {
                 },
                 body: formData
             });
+
+            if (response.status === 401) {
+                redirectToLoginIfNeeded(response);
+            }
             
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
