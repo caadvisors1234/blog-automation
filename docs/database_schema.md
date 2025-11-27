@@ -533,23 +533,8 @@ class BlogPost(models.Model):
 | users | 無期限 | 手動削除のみ |
 | blog_posts | 無期限 | ユーザーが削除可能 |
 | blog_images | 投稿と同期 | CASCADE削除 |
-| post_logs | 6ヶ月 | 定期バッチ削除 |
+| post_logs | 現状未設定 | 手動削除または将来のバッチで対応 |
 | celery results | 7日 | Celeryの自動クリーンアップ |
-
-### 9.1 定期クリーンアップタスク
-
-```python
-# apps/blog/tasks.py
-@shared_task
-def cleanup_old_logs():
-    """6ヶ月以上前のログを削除"""
-    from datetime import timedelta
-    cutoff_date = timezone.now() - timedelta(days=180)
-    deleted_count = PostLog.objects.filter(
-        completed_at__lt=cutoff_date
-    ).delete()[0]
-    return deleted_count
-```
 
 ---
 

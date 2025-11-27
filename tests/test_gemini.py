@@ -39,9 +39,9 @@ def test_gemini_integration():
         print(f"\n❌ ERROR: Failed to initialize Gemini client: {e}")
         return False
 
-    # Test 1: Simple content generation
+    # Test 1: Variation content generation
     print("\n" + "-" * 60)
-    print("Test 1: Blog Content Generation")
+    print("Test 1: Blog Content Variations Generation")
     print("-" * 60)
 
     prompt = """
@@ -53,15 +53,19 @@ def test_gemini_integration():
         print(f"\nPrompt: {prompt.strip()}")
         print("\nGenerating content...")
 
-        result = client.generate_blog_content(
+        result = client.generate_blog_content_variations(
             prompt=prompt,
+            num_variations=3,
+            image_count=0,
             temperature=0.7,
-            max_output_tokens=1000
+            max_output_tokens=1000,
         )
 
         print("\n✓ Content generated successfully!")
-        print(f"\nTitle: {result['title']}")
-        print(f"\nContent (first 200 chars):\n{result['content'][:200]}...")
+        print(f"\nVariations: {len(result['variations'])}")
+        for idx, variation in enumerate(result['variations'], start=1):
+            print(f"\n[{idx}] Title: {variation['title']}")
+            print(f"Content (first 200 chars):\n{variation['content'][:200]}...")
         print(f"\nModel: {result['model']}")
 
         return True

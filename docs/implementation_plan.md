@@ -175,7 +175,6 @@
   - ✅ リトライ機能（最大3回）
   - ✅ ステータス自動更新
   - ✅ 投稿URL記録
-- ✅ `cleanup_old_failed_posts` 実装（定期クリーンアップ）
 
 #### Worker起動 ✅
 - ✅ Celery Worker起動確認（Docker）
