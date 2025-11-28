@@ -297,7 +297,7 @@ USE_X_FORWARDED_HOST = True
 # CSRF
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_TRUSTED_ORIGINS = []
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000').split(',')
 
 if not DEBUG:
     # HTTPS Settings (production only)
