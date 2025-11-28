@@ -1,0 +1,26 @@
+services:
+  web:
+    ports:
+      - "18001:8000"
+    environment:
+      - DEBUG=True
+
+  db:
+    ports:
+      - "15433:5432"
+
+  redis:
+    ports:
+      - "16380:6379"
+
+  flower:
+    ports:
+      - "15555:5555"
+
+  celery_worker:
+    environment:
+      - DEBUG=True
+
+  celery_beat:
+    environment:
+      - DEBUG=True
