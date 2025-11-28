@@ -6,3 +6,6 @@
 - Domain: production host `blog-automation.ai-beauty.tokyo`; set `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` accordingly.
 - Reverse proxy: enable `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` and `USE_X_FORWARDED_HOST = True` when behind Nginx Proxy Manager or similar.
 - Healthcheck: use `/health` (no trailing slash) in docker-compose healthcheck to avoid 301 logs.
+- Collectstatic now runs during image build without `|| true`; missing static will fail the build to avoid 404/MIME issues in prod.
+- Base docker-compose no longer bind-mounts the project/static dirs in prod; keep only media/logs volumes to let WhiteNoise serve built assets from the image.
+- Dockerfile sets DJANGO_SETTINGS_MODULE/PYTHONDONTWRITEBYTECODE/PYTHONUNBUFFERED for build-time commands (collectstatic) and runtime.

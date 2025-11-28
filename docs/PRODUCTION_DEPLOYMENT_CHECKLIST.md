@@ -60,8 +60,10 @@
   ```bash
   python manage.py collectstatic --noinput
   ```
+- [ ] ビルド時の collectstatic エラーを握りつぶさない（ハッシュ付き静的が無いと本番で 404/MIME エラーになる）
 - [ ] メディアファイルのストレージ設定（AWS S3、GCS等）
 - [ ] 静的ファイルのCDN設定（CloudFlare、AWS CloudFront等）
+- [ ] 本番 compose ではコード/静的ディレクトリをホストバインドしない（イメージ内の WhiteNoise に任せる）。永続化は `media` と `logs` のみ。
 
 ### 5. 依存パッケージ
 

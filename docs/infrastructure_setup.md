@@ -1,4 +1,4 @@
-# 03. インフラ・環境構築ガイド (Infrastructure Setup)
+# 03. インフラ・環境構築ガイド (Infrastructure Setup) 2025-02更新
 
 ## 1. 概要
 本システムは Docker および Docker Compose 上で動作する。Playwright ブラウザコンテナでは **日本語フォント対応** が必須要件となる（スクリーンショットの文字化け防止のため）。
@@ -9,11 +9,12 @@
 - ローカル開発時のみ `docker-compose.override.yml` でポートを公開（例: `18001:8000`）。
 - `db` / `redis` は内部ネットワーク `internal` のみ。`web`/`flower` は `internal` + `app-network` に参加。
 - リバースプロキシ経由の場合、`SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` と `USE_X_FORWARDED_HOST = True` を有効化。
+- 本番ではホスト側のコードディレクトリをバインドしない（イメージ内に静的ファイルを含め、WhiteNoiseで配信）。必要な永続化マウントは `media` と `logs` のみ。
 
 ### 本番アプリサーバ
 - `gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000`
 - 静的配信: WhiteNoise (`CompressedManifestStaticFilesStorage`)
-- collectstatic はイメージビルドで実行済み。
+- collectstatic はイメージビルドで実行し、失敗は握りつぶさない（ハッシュ付き静的が無いと本番で404になるため）。
 
 ## 2. Dockerfile 設計 (Web/Worker共通)
 
@@ -22,9 +23,7 @@ Python 3.12 ベースのイメージを使用し、Playwright 依存関係と日
 ```dockerfile
 FROM python:3.12-slim
 
-# システム依存パッケージのインストール
-# fonts-noto-cjk: 日本語フォント (必須)
-# chromium 依存パッケージ: Playwright用
+# Playwright依存 & 日本語フォント & nodejs (Tailwindビルド用)
 RUN apt-get update && apt-get install -y \\
     fonts-noto-cjk \\
     libnss3 \\
@@ -40,22 +39,41 @@ RUN apt-get update && apt-get install -y \\
     libxrandr2 \\
     libgbm1 \\
     libasound2 \\
+    libasound2 \\
+    libpangocairo-1.0-0 \\
+    libpango-1.0-0 \\
+    libcairo2 \\
+    libatspi2.0-0 \\
     git \\
+    postgresql-client \\
+    curl \\
+    nodejs \\
+    npm \\
     && apt-get clean \\
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+ENV DJANGO_SETTINGS_MODULE=config.settings \\
+    PYTHONDONTWRITEBYTECODE=1 \\
+    PYTHONUNBUFFERED=1
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \\
+ && pip install --no-cache-dir -r requirements.txt
 
 # Playwright ブラウザバイナリのインストール
 RUN playwright install chromium
-RUN playwright install-deps chromium
+# playwright install-deps はパッケージ名が古いため手動で依存を追加インストール（上記 apt install）
 
 COPY . .
 
-# 実行コマンドは docker-compose.yml で定義
+# Tailwindビルド＆collectstatic（失敗を握りつぶさない）
+RUN npm install && npm run build:css
+RUN mkdir -p /app/staticfiles /app/media /app/logs
+RUN python manage.py collectstatic --noinput --clear
+
+# 実行コマンドは docker-compose.yml で定義（例: gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000）
 ```
 ## 3. 環境変数 (.env)
 
@@ -104,8 +122,8 @@ services:
     build: .
     command: celery -A config worker -l info --concurrency=2
     volumes:
-      - .:/app
       - ./media:/app/media  # 画像保存用
+      - ./logs:/app/logs
     depends_on:
       - redis
       - db
