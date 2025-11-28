@@ -1,9 +1,5 @@
 FROM python:3.12-slim
 
-# システム依存パッケージのインストール
-# fonts-noto-cjk: 日本語フォント (Playwright用、必須)
-# chromium依存パッケージ: Playwright用
-# nodejs + npm: Tailwind CSS ビルド用
 RUN apt-get update && apt-get install -y \
     fonts-noto-cjk \
     libnss3 \
@@ -33,6 +29,11 @@ RUN apt-get update && apt-get install -y \
 
 # 作業ディレクトリ設定
 WORKDIR /app
+
+# Django設定を明示（collectstatic等で必要になるため）
+ENV DJANGO_SETTINGS_MODULE=config.settings \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Python依存パッケージのインストール
 COPY requirements.txt .
@@ -74,8 +75,8 @@ RUN npm install && npm run build:css
 # 静的ファイルディレクトリ作成
 RUN mkdir -p /app/staticfiles /app/media /app/logs
 
-# 静的ファイル収集（本番用、エラーは無視）
-RUN python manage.py collectstatic --noinput --clear 2>/dev/null || true
+# 静的ファイル収集（WhiteNoise配信用。失敗を握りつぶさない）
+RUN python manage.py collectstatic --noinput --clear
 
 # ポート公開
 EXPOSE 8000
