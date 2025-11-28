@@ -80,5 +80,5 @@ RUN python manage.py collectstatic --noinput --clear 2>/dev/null || true
 # ポート公開
 EXPOSE 8000
 
-# デフォルトコマンド（docker-compose.ymlで上書き）
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+# デフォルトコマンド（docker-compose.ymlで上書き可能）
+CMD ["gunicorn", "config.asgi:application", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--access-logfile", "-"]

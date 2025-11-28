@@ -1,8 +1,18 @@
 # 03. インフラ・環境構築ガイド (Infrastructure Setup)
 
 ## 1. 概要
-本システムは Docker および Docker Compose 上で動作する。
-特に Playwright ブラウザコンテナにおける **日本語フォント対応** が必須要件となる（スクリーンショットの文字化け防止のため）。
+本システムは Docker および Docker Compose 上で動作する。Playwright ブラウザコンテナでは **日本語フォント対応** が必須要件となる（スクリーンショットの文字化け防止のため）。
+
+### Compose ネットワーク/ポート方針（2025-XX 更新）
+- ベース `docker-compose.yml` は **ポートを公開しない**（NPM 経由でアクセス）。
+- 共有ネットワーク名: `app-network`（Nginx Proxy Manager などと同一ネットワークで運用）。
+- ローカル開発時のみ `docker-compose.override.yml` でポートを公開（例: `18001:8000`）。
+- `db` / `redis` は内部ネットワーク `internal` のみ。`web`/`flower` は `internal` + `app-network` に参加。
+
+### 本番アプリサーバ
+- `gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000`
+- 静的配信: WhiteNoise (`CompressedManifestStaticFilesStorage`)
+- collectstatic はイメージビルドで実行済み。
 
 ## 2. Dockerfile 設計 (Web/Worker共通)
 

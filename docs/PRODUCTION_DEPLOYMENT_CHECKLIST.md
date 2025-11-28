@@ -1,4 +1,4 @@
-# 本番環境デプロイチェックリスト
+# 本番環境デプロイチェックリスト（2025-XX 更新）
 
 ## デプロイ前の必須タスク
 
@@ -9,8 +9,8 @@
   - Docker Secrets、AWS Secrets Manager、GCP Secret Manager等を使用
 - [ ] `DEBUG=False`に設定
 - [ ] `SECRET_KEY`を本番用の強力なキーに変更
-- [ ] `ALLOWED_HOSTS`を本番ドメインに設定（例: `your-domain.com,www.your-domain.com`）
-- [ ] `CSRF_TRUSTED_ORIGINS`に本番URLを追加（例: `https://your-domain.com`）
+- [ ] `ALLOWED_HOSTS`を本番ドメインに設定（例: `blog-automation.ai-beauty.tokyo`）
+- [ ] `CSRF_TRUSTED_ORIGINS`に本番URLを追加（例: `https://blog-automation.ai-beauty.tokyo`）
 
 #### HTTPS設定
 - [ ] SSL証明書の取得と設定（Let's Encrypt推奨）
@@ -55,7 +55,7 @@
 
 ### 4. 静的ファイルとメディア
 
-- [ ] 静的ファイルを収集
+- [ ] 静的ファイルを収集（イメージビルドで実行されるが念のため確認）
   ```bash
   python manage.py collectstatic --noinput
   ```
@@ -124,6 +124,12 @@
 - [ ] ページ読み込み速度が適切
 - [ ] データベースクエリが最適化されている
 - [ ] 静的ファイルが正しく配信されている
+
+## Docker/Compose 運用メモ
+- ベース `docker-compose.yml` はポート公開なし（NPM 経由でアクセス）。
+- ローカル開発や手動確認は `docker-compose.override.yml` を併用し、`18001:8000` で Web を公開。
+- 共有ネットワーク: `app-network`（事前に作成 or NPM で作成済みのものを再利用）。
+- `web` は Gunicorn + Uvicorn worker（ASGI）、静的配信は WhiteNoise を使用。
 
 ### 5. バックアップ設定
 
