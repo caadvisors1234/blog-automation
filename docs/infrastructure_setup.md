@@ -8,6 +8,7 @@
 - 共有ネットワーク名: `app-network`（Nginx Proxy Manager などと同一ネットワークで運用）。
 - ローカル開発時のみ `docker-compose.override.yml` でポートを公開（例: `18001:8000`）。
 - `db` / `redis` は内部ネットワーク `internal` のみ。`web`/`flower` は `internal` + `app-network` に参加。
+- リバースプロキシ経由の場合、`SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` と `USE_X_FORWARDED_HOST = True` を有効化。
 
 ### 本番アプリサーバ
 - `gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000`

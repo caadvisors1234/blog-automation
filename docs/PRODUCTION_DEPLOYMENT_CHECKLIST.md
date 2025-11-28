@@ -11,6 +11,7 @@
 - [ ] `SECRET_KEY`を本番用の強力なキーに変更
 - [ ] `ALLOWED_HOSTS`を本番ドメインに設定（例: `blog-automation.ai-beauty.tokyo`）
 - [ ] `CSRF_TRUSTED_ORIGINS`に本番URLを追加（例: `https://blog-automation.ai-beauty.tokyo`）
+- [ ] リバースプロキシ経由の場合、`SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` と `USE_X_FORWARDED_HOST = True` を有効化
 
 #### HTTPS設定
 - [ ] SSL証明書の取得と設定（Let's Encrypt推奨）
