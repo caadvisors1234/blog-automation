@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.add_field(
+        migrations.AddField(
             model_name='blogpost',
             name='stylist_name',
             field=models.CharField(

@@ -177,9 +177,6 @@
                 <dt class="text-caption text-gray-500 mb-1">スタイリスト</dt>
                 <dd class="text-body text-gray-900">
                     {{ post.stylist_name|default:post.stylist_id|default:"-" }}
-                    {% if post.stylist_id %}
-                    <span class="text-caption text-gray-400 ml-2">(ID: {{ post.stylist_id }})</span>
-                    {% endif %}
                 </dd>
             </div>
             {% endif %}
@@ -192,14 +189,7 @@
             {% endif %}
             
             <div>
-                <dt class="text-caption text-gray-500 mb-1">AI生成</dt>
-                <dd class="text-body">
-                    {% if post.ai_generated %}
-                    <span class="text-pink-500">✓ 生成済み</span>
-                    {% else %}
-                    <span class="text-gray-400">未生成</span>
-                    {% endif %}
-                </dd>
+                <!-- AI生成表示はノイズ回避のため非表示 -->
             </div>
         </dl>
     </section>
