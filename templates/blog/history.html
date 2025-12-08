@@ -63,11 +63,13 @@
                         </td>
                         <td class="px-4 py-4 text-body text-gray-600">
                             {% if log.blog_post and log.blog_post.images.exists %}
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center space-x-1">
+                                    {% for image in log.blog_post.images.all|slice:":4" %}
                                     <div class="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                                        <img src="{{ log.blog_post.images.first.image_url }}" alt="" class="w-full h-full object-cover">
+                                        <img src="{{ image.image_url }}" alt="" class="w-full h-full object-cover">
                                     </div>
-                                    <span class="text-caption text-gray-500">画像 {{ log.blog_post.images.count }}枚</span>
+                                    {% endfor %}
+                                    <span class="text-caption text-gray-500 ml-2">画像 {{ log.blog_post.images.count }}枚</span>
                                 </div>
                             {% else %}
                                 <span class="text-body text-gray-400">-</span>
