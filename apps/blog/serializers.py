@@ -52,6 +52,7 @@ class BlogPostListSerializer(serializers.ModelSerializer):
             'author_name',
             'image_count',
             'stylist_id',
+            'stylist_name',
             'coupon_name',
             'published_at',
             'created_at',
@@ -89,6 +90,7 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
             'keywords',
             'ai_generated',
             'stylist_id',
+            'stylist_name',
             'coupon_name',
             'celery_task_id',
             'salon_board_url',
@@ -147,6 +149,7 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
             'ai_prompt',
             'keywords',
             'stylist_id',
+            'stylist_name',
             'coupon_name',
             'images',
         ]
@@ -218,6 +221,7 @@ class BlogPostUpdateSerializer(serializers.ModelSerializer):
             'status',
             'keywords',
             'stylist_id',
+            'stylist_name',
             'coupon_name',
         ]
 

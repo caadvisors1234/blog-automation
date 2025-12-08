@@ -28,17 +28,9 @@
             </div>
             <div class="sm:w-48">
                 <select name="status" onchange="this.form.submit()">
-                    <option value="">すべてのステータス</option>
-                    {% for value, label in status_choices %}
+                    {% for value, label in status_group_choices %}
                     <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
-                        {% if value == 'draft' %}下書き
-                        {% elif value == 'generating' %}生成中
-                        {% elif value == 'selecting' %}選択待ち
-                        {% elif value == 'ready' %}準備完了
-                        {% elif value == 'publishing' %}投稿中
-                        {% elif value == 'published' %}公開済み
-                        {% elif value == 'failed' %}失敗
-                        {% endif %}
+                        {{ label }}
                     </option>
                     {% endfor %}
                 </select>
@@ -79,7 +71,8 @@
                             （内容未設定）
                             {% endif %}
                         </p>
-                        <div class="flex items-center space-x-4 mt-2 text-caption text-gray-400">
+                        <div class="flex flex-wrap items-center gap-3 mt-2 text-caption text-gray-400">
+                            <span>スタイリスト: {{ post.stylist_name|default:post.stylist_id|default:"-" }}</span>
                             <span>{{ post.created_at|date:"Y/m/d H:i" }}</span>
                             {% if post.images.exists %}
                             <span>画像 {{ post.images.count }}枚</span>

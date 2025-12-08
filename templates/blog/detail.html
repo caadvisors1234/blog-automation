@@ -172,10 +172,15 @@
             </div>
             {% endif %}
             
-            {% if post.stylist_id %}
+            {% if post.stylist_id or post.stylist_name %}
             <div>
-                <dt class="text-caption text-gray-500 mb-1">スタイリストID</dt>
-                <dd class="text-body text-gray-900">{{ post.stylist_id }}</dd>
+                <dt class="text-caption text-gray-500 mb-1">スタイリスト</dt>
+                <dd class="text-body text-gray-900">
+                    {{ post.stylist_name|default:post.stylist_id|default:"-" }}
+                    {% if post.stylist_id %}
+                    <span class="text-caption text-gray-400 ml-2">(ID: {{ post.stylist_id }})</span>
+                    {% endif %}
+                </dd>
             </div>
             {% endif %}
             

@@ -385,11 +385,19 @@ def post_list(request):
     """
     Blog post list view.
     """
-    posts = BlogPost.objects.filter(user=request.user).order_by('-created_at')
+    posts = BlogPost.objects.filter(user=request.user).order_by('-created_at').prefetch_related('images')
     
     # Filter by status
     status_filter = request.GET.get('status')
-    if status_filter:
+    status_map = {
+        'draft': ['draft'],
+        'preparing': ['generating', 'selecting', 'ready', 'publishing'],
+        'published': ['published'],
+        'failed': ['failed'],
+    }
+    if status_filter in status_map:
+        posts = posts.filter(status__in=status_map[status_filter])
+    elif status_filter:
         posts = posts.filter(status=status_filter)
     
     # Search
@@ -405,7 +413,13 @@ def post_list(request):
         'posts': posts,
         'status_filter': status_filter,
         'search': search,
-        'status_choices': BlogPost.STATUS_CHOICES,
+        'status_group_choices': [
+            ('', 'すべてのステータス'),
+            ('draft', '下書き'),
+            ('preparing', '投稿準備'),
+            ('published', '公開済み'),
+            ('failed', '失敗'),
+        ],
     }
     
     return render(request, 'blog/list.html', context)
@@ -442,6 +456,7 @@ def post_create(request):
         stylist_id = request.POST.get('stylist_id', '')
         coupon_name = request.POST.get('coupon_name', '')
         template_id = request.POST.get('template_id', '')
+        stylist_name = ''
 
         # Validate required fields
         if not keywords:
@@ -466,6 +481,12 @@ def post_create(request):
             messages.error(request, error_msg)
             return redirect('blog:post_create')
 
+        # Resolve stylist name from scraped list (fallback to ID if not found)
+        if stylists:
+            matched = next((s for s in stylists if s.get('stylist_id') == stylist_id), None)
+            if matched:
+                stylist_name = matched.get('name', '') or ''
+
         # Create post with 'generating' status (skip draft)
         post = BlogPost.objects.create(
             user=request.user,
@@ -473,6 +494,7 @@ def post_create(request):
             ai_prompt=ai_prompt,  # Optional: user can provide custom instructions
             keywords=keywords,
             stylist_id=stylist_id,
+            stylist_name=stylist_name,
             coupon_name=coupon_name,
             status='generating',  # Start with generating status
         )
@@ -737,7 +759,7 @@ def post_history(request):
     """
     Post history/logs view.
     """
-    logs = PostLog.objects.filter(user=request.user).order_by('-started_at')
+    logs = PostLog.objects.filter(user=request.user).order_by('-started_at').select_related('blog_post').prefetch_related('blog_post__images')
     
     # Filter by status
     status_filter = request.GET.get('status')

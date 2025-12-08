@@ -86,6 +86,13 @@ class BlogPost(models.Model):
         verbose_name='Stylist ID',
         help_text='Stylist ID (T number, e.g., T000123456)'
     )
+    stylist_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name='Stylist Name',
+        help_text='Human-readable stylist name (scraped from HPB)'
+    )
     coupon_name = models.CharField(
         max_length=100,
         blank=True,
