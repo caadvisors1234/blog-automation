@@ -67,7 +67,7 @@
                     </div>
                     <div class="min-w-0 flex-1">
                         <a href="{% url 'blog:post_detail' pk=post.pk %}" 
-                           class="text-body font-medium text-gray-900 hover:text-pink-500 transition-colors truncate block">
+                           class="text-body font-medium text-gray-900 hover:text-pink-500 transition-colors post-title-clamp block leading-tight">
                             {{ post.title|default:"（タイトル未設定）" }}
                         </a>
                         <p class="text-caption text-gray-500 mt-1 line-clamp-2">
