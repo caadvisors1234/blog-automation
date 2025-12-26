@@ -328,7 +328,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         
         # Send task started notification
         notifier.send_started("SALON BOARDへの投稿を開始しました")
-        notifier.send_progress(5, "準備中...")
+        notifier.send_progress(5, "準備を開始します...", status="progress", extra={'step_id': 'STEP_PREPARING'})
 
         # Get or create post log
         if log_id:
@@ -400,7 +400,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
 
             return {'success': False, 'error': 'Missing title or content'}
 
-        notifier.send_progress(10, "認証情報を確認中...")
+        notifier.send_progress(10, "認証情報を確認しています...", status="progress", extra={'step_id': 'STEP_AUTH'})
 
         # Get SALON BOARD account
         try:
@@ -439,17 +439,17 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
         # Get image paths
         image_paths = [img.file_path for img in post.images.all().order_by('order')]
         
-        notifier.send_progress(15, f"画像{len(image_paths)}枚を準備しました")
+        notifier.send_progress(15, f"画像{len(image_paths)}枚を準備しました", status="progress", extra={'step_id': 'STEP_PREPARING'})
 
         publication_result = None
         publication_completed = False
 
         # Initialize SALON BOARD client and publish
         try:
-            notifier.send_progress(20, "ブラウザを起動中...")
+            notifier.send_progress(20, "SALON BOARDへ安全に接続しています...", status="progress", extra={'step_id': 'STEP_AUTH'})
 
             with SALONBoardClient() as client:
-                notifier.send_progress(30, "SALON BOARDにログイン中...")
+                notifier.send_progress(30, "ログイン処理を実行中...", status="progress", extra={'step_id': 'STEP_AUTH'})
 
                 # Login (raises LoginError or RobotDetectionError on failure)
                 client.login(
@@ -457,7 +457,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
                     password=password
                 )
 
-                notifier.send_progress(50, "ログイン成功。投稿を作成中...")
+                notifier.send_progress(50, "ログイン成功。記事を入力しています...", status="progress", extra={'step_id': 'STEP_POSTING'})
 
                 # Publish post
                 publication_result = client.publish_blog_post(

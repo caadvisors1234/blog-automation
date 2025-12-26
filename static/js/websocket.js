@@ -24,20 +24,20 @@ class BlogWebSocket {
      */
     connect(postId = null) {
         this.postId = postId;
-        
+
         // Determine WebSocket URL
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         let path = '/ws/blog/progress/';
-        
+
         if (postId) {
             path = `/ws/blog/progress/${postId}/`;
         }
-        
+
         const wsUrl = `${protocol}//${host}${path}`;
-        
+
         console.log(`[WebSocket] Connecting to ${wsUrl}`);
-        
+
         try {
             this.socket = new WebSocket(wsUrl);
             this.setupEventHandlers();
@@ -55,9 +55,9 @@ class BlogWebSocket {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         const wsUrl = `${protocol}//${host}/ws/task/${taskId}/`;
-        
+
         console.log(`[WebSocket] Connecting to task ${taskId}`);
-        
+
         try {
             this.socket = new WebSocket(wsUrl);
             this.setupEventHandlers();
@@ -83,7 +83,7 @@ class BlogWebSocket {
             this.connected = false;
             this.updateConnectionStatus(false);
             this.emit('disconnected', event);
-            
+
             // Attempt reconnect for normal closures
             if (event.code !== 1000 && event.code !== 4001) {
                 this.handleReconnect();
@@ -111,9 +111,9 @@ class BlogWebSocket {
      */
     handleMessage(data) {
         const { type } = data;
-        
+
         console.log(`[WebSocket] Received: ${type}`, data);
-        
+
         const taskType = data.task_type || data.taskType || '';
         const isPublishTask = taskType === 'publish';
 
@@ -121,29 +121,39 @@ class BlogWebSocket {
             case 'connection_established':
                 this.emit('connection_established', data);
                 break;
-                
+
             case 'task_started':
                 this.emit('task_started', data);
                 if (isPublishTask) {
                     this.showProgress(data.message || 'タスクを開始しました', 0);
                 }
                 break;
-                
+
             case 'task_progress':
                 this.emit('task_progress', data);
                 if (isPublishTask) {
-                    this.updateProgress(data.progress, data.message);
+                    this.updateProgress(data.progress, data.message, data.step_id);
                 }
                 break;
-                
+
             case 'task_completed':
                 this.emit('task_completed', data);
-                this.showSuccess(data.message || '処理が完了しました');
                 if (isPublishTask) {
-                    this.hideProgress();
+                    // Force progress to 100% and show completion message
+                    this.updateProgress(100, '投稿が完了しました！', 'STEP_SAVING');
+
+                    // Show confetti or success effect here if desired in future
+
+                    // Wait for user to see the 100% state before hiding
+                    setTimeout(() => {
+                        this.hideProgress();
+                        this.showSuccess(data.message || '処理が完了しました');
+                    }, 1500);
+                } else {
+                    this.showSuccess(data.message || '処理が完了しました');
                 }
                 break;
-                
+
             case 'task_failed':
                 this.emit('task_failed', data);
                 this.showError(data.message || 'エラーが発生しました');
@@ -151,19 +161,19 @@ class BlogWebSocket {
                     this.hideProgress();
                 }
                 break;
-                
+
             case 'status_update':
                 this.emit('status_update', data);
                 break;
-                
+
             case 'task_status':
                 this.emit('task_status', data);
                 break;
-                
+
             case 'pong':
                 // Keepalive response
                 break;
-                
+
             default:
                 console.log(`[WebSocket] Unknown message type: ${type}`);
                 this.emit(type, data);
@@ -182,9 +192,9 @@ class BlogWebSocket {
 
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-        
+
         console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-        
+
         setTimeout(() => {
             this.connect(this.postId);
         }, delay);
@@ -293,7 +303,7 @@ class BlogWebSocket {
         if (statusEl) {
             const dot = statusEl.querySelector('span:first-child');
             const text = statusEl.querySelector('span:last-child');
-            
+
             if (connected) {
                 dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse';
                 text.textContent = 'システム稼働中';
@@ -305,60 +315,179 @@ class BlogWebSocket {
     }
 
     /**
-     * Show progress modal
+     * Show progress modal with advanced UI
      * @param {string} message - Progress message
      * @param {number} percent - Progress percentage
      */
     showProgress(message, percent = 0) {
         const modal = document.getElementById('progress-modal');
+        const modalContent = document.getElementById('progress-modal-content');
         const messageEl = document.getElementById('progress-message');
         const titleEl = document.getElementById('progress-title');
         const barEl = document.getElementById('progress-bar');
         const percentEl = document.getElementById('progress-percent');
-        
+        const cheerEl = document.getElementById('cheer-message');
+
         if (modal) {
+            // Show modal with animation
             modal.classList.remove('hidden');
-            if (titleEl) titleEl.textContent = '処理中';
+            // Force reflow
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+
+            if (modalContent) {
+                modalContent.classList.remove('opacity-0', 'scale-95');
+                modalContent.classList.add('opacity-100', 'scale-100');
+            }
+
+            if (titleEl) titleEl.textContent = '処理中...';
             if (messageEl) messageEl.textContent = message;
             if (barEl) barEl.style.width = `${percent}%`;
             if (percentEl) percentEl.textContent = `${percent}%`;
+
+            // Set initial random cheer message
+            if (cheerEl && window.waitingContent) {
+                this.updateCheerMessage();
+                // Start rotation
+                this.startMessageRotation();
+            }
+
+            // Set Step 1 active
+            this.updateStep(percent < 10 ? 'STEP_PREPARING' : null);
         }
     }
 
     /**
-     * Update progress bar
+     * Update progress bar and steps
      * @param {number} percent - Progress percentage
      * @param {string} message - Progress message
+     * @param {string} stepId - Current Step ID (optional, from server)
      */
-    updateProgress(percent, message) {
+    updateProgress(percent, message, stepId = null) {
         const messageEl = document.getElementById('progress-message');
         const barEl = document.getElementById('progress-bar');
         const percentEl = document.getElementById('progress-percent');
-        
+
         if (barEl) barEl.style.width = `${percent}%`;
         if (percentEl) percentEl.textContent = `${percent}%`;
-        if (messageEl && message) messageEl.textContent = message;
+
+        // Update main status message
+        if (messageEl && message) {
+            messageEl.textContent = message;
+
+            // Add fade animation effect to text change
+            messageEl.classList.remove('animate-pulse');
+            void messageEl.offsetWidth;
+            messageEl.classList.add('animate-pulse');
+        }
+
+        // Infer step from percentage if stepId is not provided
+        if (!stepId) {
+            if (percent < 20) stepId = 'STEP_PREPARING';
+            else if (percent < 40) stepId = 'STEP_AUTH';
+            else if (percent < 80) stepId = 'STEP_POSTING';
+            else stepId = 'STEP_SAVING';
+        }
+
+        this.updateStep(stepId);
     }
 
     /**
-     * Hide progress panel
+     * Update active step indicator
+     * @param {string} stepId - Step ID to activate
+     */
+    updateStep(stepId) {
+        if (!stepId) return;
+
+        const steps = ['STEP_PREPARING', 'STEP_AUTH', 'STEP_POSTING', 'STEP_SAVING'];
+        const currentIndex = steps.indexOf(stepId);
+
+        document.querySelectorAll('.step-item').forEach(el => {
+            const elStep = el.dataset.step;
+            const elIndex = steps.indexOf(elStep);
+            const dot = el.querySelector('span');
+
+            // Reset classes
+            el.classList.remove('text-pink-600', 'font-bold', 'text-gray-400', 'text-gray-800');
+            dot.classList.remove('bg-pink-500', 'bg-gray-200', 'bg-green-500', 'animate-pulse');
+
+            if (elIndex < currentIndex) {
+                // Completed
+                el.classList.add('text-pink-600');
+                dot.classList.add('bg-pink-500');
+                // Checkmark could be added here
+            } else if (elIndex === currentIndex) {
+                // Current
+                el.classList.add('text-gray-800', 'font-bold');
+                dot.classList.add('bg-pink-500', 'animate-pulse');
+            } else {
+                // Future
+                el.classList.add('text-gray-400');
+                dot.classList.add('bg-gray-200');
+            }
+        });
+    }
+
+    /**
+     * Start rotating cheer messages
+     */
+    startMessageRotation() {
+        // Clear existing interval
+        if (this.messageInterval) clearInterval(this.messageInterval);
+
+        this.messageInterval = setInterval(() => {
+            this.updateCheerMessage();
+        }, 6000); // Rotate every 6 seconds
+    }
+
+    /**
+     * Update the cheer message with animation
+     */
+    updateCheerMessage() {
+        const cheerEl = document.getElementById('cheer-message');
+        if (!cheerEl || !window.waitingContent) return;
+
+        // Fade out
+        cheerEl.classList.add('opacity-0', 'translate-y-2');
+
+        setTimeout(() => {
+            // Change text
+            cheerEl.textContent = window.waitingContent.getRandomCheer();
+
+            // Fade in
+            cheerEl.classList.remove('opacity-0', 'translate-y-2');
+        }, 500);
+    }
+
+    /**
+     * Hide progress panel with animation
      */
     hideProgress() {
         const modal = document.getElementById('progress-modal');
-        const messageEl = document.getElementById('progress-message');
-        const barEl = document.getElementById('progress-bar');
-        const percentEl = document.getElementById('progress-percent');
-        const titleEl = document.getElementById('progress-title');
+        const modalContent = document.getElementById('progress-modal-content');
+
+        // Stop rotation
+        if (this.messageInterval) {
+            clearInterval(this.messageInterval);
+            this.messageInterval = null;
+        }
 
         if (!modal) return;
 
-        if (barEl) barEl.style.width = '0%';
-        if (percentEl) percentEl.textContent = '0%';
-        if (messageEl) messageEl.textContent = 'しばらくお待ちください';
-        if (titleEl) titleEl.textContent = '処理中';
+        // Fade out animation
+        modal.classList.add('opacity-0');
+        if (modalContent) {
+            modalContent.classList.remove('opacity-100', 'scale-100');
+            modalContent.classList.add('opacity-0', 'scale-95');
+        }
 
         setTimeout(() => {
             modal.classList.add('hidden');
+            // Reset state
+            const barEl = document.getElementById('progress-bar');
+            const percentEl = document.getElementById('progress-percent');
+            if (barEl) barEl.style.width = '0%';
+            if (percentEl) percentEl.textContent = '0%';
         }, 300);
     }
 
@@ -418,7 +547,7 @@ class BlogWebSocket {
             return;
         }
 
-        // Limit total toasts to avoid stacking
+        // Limit total toasts
         const maxToasts = 3;
         while (container.children.length >= maxToasts) {
             container.removeChild(container.firstChild);
@@ -459,12 +588,12 @@ window.blogWS = new BlogWebSocket();
 
 // Auto-connect on page load (if user is authenticated)
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if user is authenticated (you can customize this check)
+    // Check if user is authenticated
     const userAuthenticated = document.body.dataset.authenticated === 'true';
-    
+
     if (userAuthenticated) {
         window.blogWS.connect();
-        
+
         // Setup keepalive ping every 30 seconds
         setInterval(() => {
             window.blogWS.ping();

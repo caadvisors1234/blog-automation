@@ -173,7 +173,8 @@ class ProgressNotifier:
         self,
         progress: int,
         message: str,
-        status: str = 'progress'
+        status: str = 'progress',
+        **kwargs
     ) -> None:
         """
         Send progress update notification.
@@ -182,6 +183,7 @@ class ProgressNotifier:
             progress: Progress percentage (0-100)
             message: Human-readable status message
             status: Status string (progress/processing/etc.)
+            **kwargs: Extra fields to include in the event (e.g., step_id)
         """
         event = {
             'type': 'task_progress',
@@ -192,6 +194,15 @@ class ProgressNotifier:
             'status': status,
             'timestamp': self._get_timestamp(),
         }
+        
+        # Merge extra fields
+        if kwargs:
+            event.update(kwargs)
+            # Handle 'extra' specifically if passed as a dict (backward compatibility/style)
+            if 'extra' in kwargs:
+                event.update(kwargs['extra'])
+                del event['extra']
+
         self._send_to_groups(event)
         
         if self.task_group:
