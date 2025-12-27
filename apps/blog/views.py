@@ -531,10 +531,14 @@ def post_create(request):
     # Get user's templates
     templates = BlogPostTemplate.objects.filter(user=request.user).order_by('name')
 
+    # Get last created post for reuse
+    last_post = BlogPost.objects.filter(user=request.user).order_by('-created_at').first()
+
     context = {
         'stylists': stylists,
         'coupons': coupons,
         'templates': templates,
+        'last_post': last_post,
     }
 
     return render(request, 'blog/create.html', context)

@@ -27,6 +27,7 @@ from .salon_board_client import (
     UploadError
 )
 from .progress import ProgressNotifier
+from .utils import smart_truncate
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 
 【要件】
 - 美容サロンのお客様向けに親しみやすく読みやすい記事にする
-- タイトルは25文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
+- タイトルは20文字以内で、クリックを誘うワード（例: {click_words} のいずれか）を1つ以上入れる
 - 可能であれば「{current_year}年版」を自然に含める
 - 本文は500〜600文字程度（最大1000文字厳守）
 - {guidance}
@@ -214,7 +215,9 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
                         # Truncate base content to make room for template
                         available_space = 1000 - len(separator) - len(template_content)
                         if available_space > 0:
-                            variation['content'] = current_content[:available_space] + separator + template_content
+                            # Use smart_truncate for better user experience
+                            base_truncated = smart_truncate(current_content, available_space)
+                            variation['content'] = base_truncated + separator + template_content
                         else:
                             # Template alone exceeds 1000 chars, just truncate combined
                             variation['content'] = combined_content[:1000]
@@ -227,7 +230,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
                         f"Post {post_id} variation content exceeds 1000 chars "
                         f"({len(variation['content'])} chars), truncating..."
                     )
-                    variation['content'] = variation['content'][:1000]
+                    variation['content'] = smart_truncate(variation['content'], 1000)
 
             # Update post with generated variations
             # Refresh from database to avoid stale object issues
@@ -537,7 +540,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             try:
                 notifier.send_failed(
                     error=str(e),
-                    message='CAPTCHA認証が検出されました。手動での対応が必要です。'
+                    message='CAPTCHA認証が検出されました。しばらく時間を置いてから再試行するか、手動での対応が必要です。'
                 )
             except Exception as notif_error:
                 logger.error(f"Failed to send notification: {notif_error}")
@@ -564,7 +567,7 @@ def publish_to_salon_board_task(self, post_id: int, log_id: int = None):
             try:
                 notifier.send_failed(
                     error=str(e),
-                    message='SALON BOARDへのログインに失敗しました。認証情報を確認してください。'
+                    message='SALON BOARDへのログインに失敗しました。認証情報を確認してください。パスワードが変更された可能性があります。'
                 )
             except Exception as notif_error:
                 logger.error(f"Failed to send notification: {notif_error}")

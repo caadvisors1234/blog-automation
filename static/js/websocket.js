@@ -15,7 +15,14 @@ class BlogWebSocket {
         this.reconnectDelay = 1000;
         this.listeners = new Map();
         this.connected = false;
+        this.connected = false;
         this.postId = null;
+
+        // Watchdog for task monitoring
+        this.isTaskRunning = false;
+        this.lastMessageTime = 0;
+        // Watchdog setting (60 seconds)
+        this.WATCHDOG_TIMEOUT = 60000; // 60 seconds
     }
 
     /**
@@ -110,6 +117,7 @@ class BlogWebSocket {
      * @param {Object} data - Parsed message data
      */
     handleMessage(data) {
+        this.lastMessageTime = Date.now();
         const { type } = data;
 
         console.log(`[WebSocket] Received: ${type}`, data);
@@ -125,6 +133,8 @@ class BlogWebSocket {
             case 'task_started':
                 this.emit('task_started', data);
                 if (isPublishTask) {
+                    this.isTaskRunning = true;
+                    this.startWatchdog();
                     this.showProgress(data.message || 'タスクを開始しました', 0);
                 }
                 break;
@@ -138,6 +148,9 @@ class BlogWebSocket {
 
             case 'task_completed':
                 this.emit('task_completed', data);
+                this.isTaskRunning = false;
+                this.stopWatchdog();
+
                 if (isPublishTask) {
                     // Force progress to 100% and show completion message
                     this.updateProgress(100, '投稿が完了しました！', 'STEP_SAVING');
@@ -156,6 +169,9 @@ class BlogWebSocket {
 
             case 'task_failed':
                 this.emit('task_failed', data);
+                this.isTaskRunning = false;
+                this.stopWatchdog();
+
                 this.showError(data.message || 'エラーが発生しました');
                 if (isPublishTask) {
                     this.hideProgress();
@@ -288,6 +304,71 @@ class BlogWebSocket {
                 }
             });
         }
+    }
+
+    // ========================================
+    // Watchdog Methods
+    // ========================================
+
+    /**
+     * Start the task watchdog
+     */
+    startWatchdog() {
+        this.stopWatchdog();
+        this.lastMessageTime = Date.now();
+        this.isTaskRunning = true;
+
+        console.log('[WebSocket] Starting task watchdog');
+
+        this.watchdogTimer = setInterval(() => {
+            if (!this.isTaskRunning) return;
+
+            const timeSinceLastMessage = Date.now() - this.lastMessageTime;
+            if (timeSinceLastMessage > this.WATCHDOG_TIMEOUT) {
+                this.handleTaskTimeout();
+            }
+        }, 5000); // Check every 5 seconds
+    }
+
+    /**
+     * Stop the task watchdog
+     */
+    stopWatchdog() {
+        if (this.watchdogTimer) {
+            clearInterval(this.watchdogTimer);
+            this.watchdogTimer = null;
+        }
+        this.isTaskRunning = false;
+    }
+
+    /**
+     * Handle task timeout event
+     */
+    handleTaskTimeout() {
+        console.warn('[WebSocket] Task timeout detected');
+        this.stopWatchdog();
+
+        // Update UI to show error in modal
+        const titleEl = document.getElementById('progress-title');
+        const messageEl = document.getElementById('progress-message');
+        const barEl = document.getElementById('progress-bar');
+
+        if (titleEl) {
+            titleEl.textContent = '接続エラー';
+            titleEl.classList.add('text-red-600');
+        }
+
+        if (messageEl) {
+            messageEl.textContent = 'サーバーからの応答がありません。処理が停止した可能性があります。';
+            messageEl.classList.add('text-red-600');
+        }
+
+        if (barEl) {
+            barEl.classList.remove('bg-pink-500');
+            barEl.classList.add('bg-red-500');
+        }
+
+        this.showError('処理が長時間停止しています。通信環境を確認するか、ページを更新してください。');
     }
 
     // ========================================
