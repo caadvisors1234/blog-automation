@@ -7,14 +7,14 @@
 <div id="post-detail" data-post-id="{{ post.pk }}" class="max-w-3xl mx-auto px-6 lg:px-8 py-10">
     <!-- Header -->
     <header class="mb-10">
-        <a href="{% url 'blog:post_list' %}" 
-           class="inline-flex items-center text-body text-gray-500 hover:text-gray-900 transition-colors mb-6">
+        <a href="{% url 'blog:post_list' %}"
+            class="inline-flex items-center text-body text-gray-500 hover:text-gray-900 transition-colors mb-6">
             <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
             </svg>
             記事一覧
         </a>
-        
+
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
                 <div class="flex items-start space-x-3 mb-3">
@@ -39,7 +39,7 @@
                     {% endif %}
                 </p>
             </div>
-            
+
             <div class="flex items-center space-x-3">
                 <a href="{% url 'blog:post_edit' pk=post.pk %}" class="btn btn-secondary">
                     編集
@@ -50,7 +50,7 @@
             </div>
         </div>
     </header>
-    
+
     <!-- Actions -->
     {% if post.status == 'generating' %}
     <section class="card mb-8 border border-blue-100 bg-blue-50/50">
@@ -65,7 +65,7 @@
         </div>
     </section>
     {% endif %}
-    
+
     {% if post.status == 'selecting' %}
     <section class="card mb-8 border border-pink-100 bg-pink-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -79,7 +79,7 @@
         </div>
     </section>
     {% endif %}
-    
+
     {% if post.status == 'draft' %}
     <section class="card mb-8 border border-pink-100 bg-pink-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -111,7 +111,7 @@
         </div>
     </section>
     {% endif %}
-    
+
     {% if post.status == 'published' and post.salon_board_url %}
     <section class="card mb-8 border border-pink-100 bg-pink-50/50">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -125,7 +125,7 @@
         </div>
     </section>
     {% endif %}
-    
+
     <!-- Images -->
     {% if images %}
     <section class="card mb-8">
@@ -134,20 +134,22 @@
             {% for image in images %}
             <div class="relative group">
                 <button type="button"
-                        class="w-full focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 rounded-lg"
-                        onclick="openImageLightbox({{ forloop.counter0 }})"
-                        aria-label="画像 {{ image.order }} を拡大表示">
+                    class="w-full focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 rounded-lg lightbox-trigger"
+                    data-index="{{ forloop.counter0 }}" aria-label="画像 {{ image.order }} を拡大表示">
                     <img src="{{ image.image_url }}" alt="画像 {{ image.order }}"
-                         class="w-full aspect-square object-cover rounded-lg transition-transform duration-200 group-hover:scale-[1.02]"
-                         data-lightbox-src="{{ image.image_url }}"
-                         data-lightbox-alt="画像 {{ image.order }}">
-                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-lg transition-colors flex items-center justify-center">
-                        <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                        class="w-full aspect-square object-cover rounded-lg transition-transform duration-200 group-hover:scale-[1.02]"
+                        data-lightbox-src="{{ image.image_url }}" data-lightbox-alt="画像 {{ image.order }}">
+                    <div
+                        class="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-lg transition-colors flex items-center justify-center">
+                        <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
                         </svg>
                     </div>
                 </button>
-                <div class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white shadow-sm">
+                <div
+                    class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white shadow-sm">
                     {{ image.order }}
                 </div>
             </div>
@@ -156,7 +158,7 @@
         <p class="text-caption text-gray-400 mt-3">クリックで拡大表示</p>
     </section>
     {% endif %}
-    
+
     <!-- Content -->
     <section class="card mb-8">
         <h2 class="text-title text-gray-900 mb-4">本文</h2>
@@ -166,7 +168,7 @@
         <p class="text-body text-gray-400">（本文未生成）</p>
         {% endif %}
     </section>
-    
+
     <!-- Meta Info -->
     <section class="card mb-8">
         <h2 class="text-title text-gray-900 mb-6">詳細情報</h2>
@@ -177,14 +179,14 @@
                 <dd class="text-body text-gray-900">{{ post.keywords }}</dd>
             </div>
             {% endif %}
-            
+
             {% if post.ai_prompt %}
             <div class="sm:col-span-2">
                 <dt class="text-caption text-gray-500 mb-1">AIプロンプト</dt>
                 <dd class="text-body text-gray-900 whitespace-pre-wrap">{{ post.ai_prompt }}</dd>
             </div>
             {% endif %}
-            
+
             {% if post.stylist_id or post.stylist_name %}
             <div>
                 <dt class="text-caption text-gray-500 mb-1">スタイリスト</dt>
@@ -193,20 +195,20 @@
                 </dd>
             </div>
             {% endif %}
-            
+
             {% if post.coupon_name %}
             <div>
                 <dt class="text-caption text-gray-500 mb-1">クーポン</dt>
                 <dd class="text-body text-gray-900">{{ post.coupon_name }}</dd>
             </div>
             {% endif %}
-            
+
             <div>
                 <!-- AI生成表示はノイズ回避のため非表示 -->
             </div>
         </dl>
     </section>
-    
+
     <!-- Logs -->
     {% if logs %}
     <section class="card">
@@ -218,20 +220,24 @@
                     {% if log.status == 'success' %}
                     <span class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
                         <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
                         </svg>
                     </span>
                     {% elif log.status == 'failed' %}
                     <span class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
                         <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </span>
                     {% else %}
                     <span class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                         <svg class="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3">
+                            </circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
                     </span>
                     {% endif %}
@@ -282,6 +288,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // Lightbox triggers
+        document.querySelectorAll('.lightbox-trigger').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const index = parseInt(btn.dataset.index || '0', 10);
+                openImageLightbox(index);
+            });
+        });
         const root = document.getElementById('post-detail');
         const postId = root ? Number(root.dataset.postId) : null;
         if (!postId) {
@@ -299,13 +312,13 @@
         }
 
         window.blogWS.connect(postId);
-        
+
         window.blogWS.on('task_completed', (data) => {
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
         });
-        
+
         window.blogWS.on('task_failed', (data) => {
             setTimeout(() => {
                 window.location.reload();
