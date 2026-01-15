@@ -5,17 +5,20 @@ Tests for Supabase authentication functionality
 
 import json
 import jwt
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.test import TestCase, Client
+from django.test.utils import override_settings
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 from apps.accounts.models import LoginAttempt
 from apps.accounts.utils import verify_supabase_token
 
 User = get_user_model()
 
 
+@override_settings(RATELIMIT_ENABLE=False)
 class SupabaseAuthenticationTest(TestCase):
     """Test suite for Supabase authentication"""
 
@@ -44,7 +47,7 @@ class SupabaseAuthenticationTest(TestCase):
         Returns:
             JWT token string
         """
-        now = datetime.utcnow()
+        now = timezone.now()
         exp = now - timedelta(hours=1) if expired else now + timedelta(hours=1)
 
         payload = {
@@ -234,7 +237,7 @@ class SupabaseAuthenticationTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         # Session should expire on browser close
-        self.assertEqual(self.client.session.get_expiry_age(), 0)
+        self.assertTrue(self.client.session.get_expire_at_browser_close())
 
     def test_session_expiry_remember_true(self):
         """Test session expiry when remember=True"""
@@ -292,6 +295,7 @@ class SupabaseAuthenticationTest(TestCase):
         self.assertFalse(failed_attempt.success)
         self.assertIsNotNone(failed_attempt.failure_reason)
 
+    @override_settings(RATELIMIT_ENABLE=True)
     def test_rate_limiting(self):
         """Test rate limiting on login endpoint"""
         token = self.create_test_token()
@@ -309,6 +313,6 @@ class SupabaseAuthenticationTest(TestCase):
             )
             responses.append(response)
 
-        # At least one request should be rate limited (429)
+        # At least one request should be rate limited (403 is default)
         status_codes = [r.status_code for r in responses]
-        self.assertIn(429, status_codes)
+        self.assertIn(403, status_codes)

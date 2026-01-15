@@ -68,11 +68,7 @@ class ProgressNotifier:
     
     def _send_to_groups(self, event: Dict[str, Any]) -> None:
         """
-        Send event to relevant channel groups.
-
-        To avoid duplicate notifications, sends only to post_group.
-        Users who are subscribed to both user_group and post_group
-        would otherwise receive the same notification twice.
+        Send event to the post-specific channel group only.
 
         Args:
             event: Event data to send
@@ -82,6 +78,7 @@ class ProgressNotifier:
             return
 
         try:
+            target_group = self.post_group
             # Check if we're in an async context
             import asyncio
             try:
@@ -89,8 +86,7 @@ class ProgressNotifier:
                 # We're in an async context, use create_task for async sending
                 async def send_async():
                     try:
-                        # Only send to post_group to avoid duplicate notifications
-                        await self.channel_layer.group_send(self.post_group, event)
+                        await self.channel_layer.group_send(target_group, event)
                         logger.debug("Notification sent successfully via asyncio.create_task")
                     except Exception as e:
                         logger.error(f"Failed to send notification in async task: {e}")
@@ -99,9 +95,8 @@ class ProgressNotifier:
                 logger.debug("Scheduled notification via asyncio.create_task")
             except RuntimeError:
                 # No running loop, safe to use async_to_sync
-                # Only send to post_group to avoid duplicate notifications
                 async_to_sync(self.channel_layer.group_send)(
-                    self.post_group,
+                    target_group,
                     event
                 )
         except Exception as e:

@@ -27,6 +27,12 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """
+        Limit user access to the authenticated user only.
+        """
+        return User.objects.filter(id=self.request.user.id)
+
     @action(detail=False, methods=['get', 'patch'], url_path='me')
     def me(self, request):
         """
@@ -192,7 +198,11 @@ def supabase_login_view(request):
         access_token = data.get('access_token')
         remember = data.get('remember', False)
 
-        logger.info(f'Supabase login attempt from IP {ip_address} - Token length: {len(access_token) if access_token else 0}')
+        logger.info(
+            "Supabase login attempt from IP %s - Token length: %s",
+            ip_address,
+            len(access_token) if access_token else 0,
+        )
 
         if not access_token:
             logger.warning('Supabase login failed: No access token provided')
@@ -202,11 +212,10 @@ def supabase_login_view(request):
             )
 
         # Verify Supabase JWT token
-        logger.debug(f'Verifying JWT token: {access_token[:50]}...')
         payload = verify_supabase_token(access_token)
 
         if not payload:
-            logger.error(f'JWT token verification failed for token: {access_token[:50]}...')
+            logger.error("JWT token verification failed")
             # Record failed login attempt
             email = payload.get('email', 'unknown') if payload else 'unknown'
             LoginAttempt.objects.create(
@@ -221,7 +230,7 @@ def supabase_login_view(request):
                 status=401
             )
 
-        logger.info(f'JWT token verified successfully. Payload: {payload}')
+        logger.info("JWT token verified successfully")
 
         # Extract user information from token
         supabase_user_id = payload.get('sub')

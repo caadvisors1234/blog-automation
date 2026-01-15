@@ -43,7 +43,7 @@ def verify_supabase_token(token: str) -> Optional[Dict[str, Any]]:
         Decoded token payload if valid, None otherwise
     """
     try:
-        logger.debug(f'Attempting to verify JWT token with secret length: {len(settings.SUPABASE_JWT_SECRET)}')
+        logger.debug('Attempting to verify JWT token')
 
         # Decode and verify JWT token
         # Note: We don't verify 'aud' (audience) because Supabase tokens have 'aud': 'authenticated'
@@ -59,7 +59,7 @@ def verify_supabase_token(token: str) -> Optional[Dict[str, Any]]:
                 'verify_aud': False,  # Don't verify audience claim
             }
         )
-        logger.info(f'JWT token verified successfully. User ID: {payload.get("sub")}, Email: {payload.get("email")}')
+        logger.info('JWT token verified successfully. User ID: %s', payload.get('sub'))
         return payload
     except jwt.ExpiredSignatureError as e:
         logger.error(f'JWT token expired: {str(e)}')

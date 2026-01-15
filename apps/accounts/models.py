@@ -55,8 +55,12 @@ class User(AbstractUser):
         """
         Override save to extract salon ID from HPB URL
         """
-        if self.hpb_salon_url and not self.hpb_salon_id:
-            self.hpb_salon_id = self._extract_salon_id(self.hpb_salon_url)
+        if self.hpb_salon_url:
+            extracted_id = self._extract_salon_id(self.hpb_salon_url)
+            if self.hpb_salon_id != extracted_id:
+                self.hpb_salon_id = extracted_id
+        elif self.hpb_salon_id:
+            self.hpb_salon_id = ''
         super().save(*args, **kwargs)
 
     @staticmethod

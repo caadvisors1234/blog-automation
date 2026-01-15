@@ -49,17 +49,18 @@ class BlogProgressConsumer(AsyncJsonWebsocketConsumer):
         # Get post_id from URL if provided
         self.post_id = self.scope['url_route']['kwargs'].get('post_id')
         
-        # Define group names
-        self.user_group_name = f"blog_progress_{self.user.id}"
-        
-        # Join user-specific group
-        await self.channel_layer.group_add(
-            self.user_group_name,
-            self.channel_name
-        )
-        
         # Join post-specific group if post_id is provided
         if self.post_id:
+            # Verify user owns the post before subscribing
+            if not await self._user_owns_post(self.post_id):
+                logger.warning(
+                    "User %s attempted to subscribe to unauthorized post %s",
+                    self.user.id,
+                    self.post_id,
+                )
+                await self.close(code=4003)
+                return
+
             self.post_group_name = f"blog_progress_post_{self.post_id}"
             await self.channel_layer.group_add(
                 self.post_group_name,
@@ -67,6 +68,12 @@ class BlogProgressConsumer(AsyncJsonWebsocketConsumer):
             )
             logger.info(f"User {self.user.id} connected to post {self.post_id} progress channel")
         else:
+            # Join user-specific group only for general progress channel
+            self.user_group_name = f"blog_progress_{self.user.id}"
+            await self.channel_layer.group_add(
+                self.user_group_name,
+                self.channel_name
+            )
             self.post_group_name = None
             logger.info(f"User {self.user.id} connected to general progress channel")
         
@@ -290,6 +297,16 @@ class TaskStatusConsumer(AsyncJsonWebsocketConsumer):
         if not self.task_id:
             await self.close(code=4000)
             return
+
+        # Verify user is authorized to view this task
+        if not await self._user_owns_task(self.task_id):
+            logger.warning(
+                "User %s attempted to subscribe to unauthorized task %s",
+                self.user.id,
+                self.task_id,
+            )
+            await self.close(code=4003)
+            return
         
         self.task_group_name = f"celery_task_{self.task_id}"
         
@@ -312,6 +329,23 @@ class TaskStatusConsumer(AsyncJsonWebsocketConsumer):
                 self.task_group_name,
                 self.channel_name
             )
+
+    @database_sync_to_async
+    def _user_owns_task(self, task_id: str) -> bool:
+        """
+        Check if the connected user owns the specified task.
+
+        Args:
+            task_id: Celery task ID to check
+
+        Returns:
+            True if user owns a post with the task_id, False otherwise
+        """
+        from apps.blog.models import BlogPost
+        return BlogPost.objects.filter(
+            user=self.user,
+            celery_task_id=task_id
+        ).exists()
     
     async def task_status(self, event):
         """

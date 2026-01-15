@@ -237,6 +237,9 @@ REST_FRAMEWORK = {
     'TIME_FORMAT': '%H:%M:%S',
 }
 
+# Test runner configuration (avoid test discovery import conflicts)
+TEST_RUNNER = 'config.test_runner.PatchedDiscoverRunner'
+
 
 # Logging Configuration
 
