@@ -4,7 +4,7 @@
 {% block title %}{{ post.title|default:"記事詳細" }} - HPB Blog Automation{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-6 lg:px-8 py-10">
+<div id="post-detail" data-post-id="{{ post.pk }}" class="max-w-3xl mx-auto px-6 lg:px-8 py-10">
     <!-- Header -->
     <header class="mb-10">
         <a href="{% url 'blog:post_list' %}" 
@@ -87,7 +87,7 @@
                 <h3 class="text-body font-medium text-gray-900">AI記事生成</h3>
                 <p class="text-caption text-gray-500">キーワードからAIが3つの記事案を自動生成します</p>
             </div>
-            <button onclick="blogActions.generate({{ post.pk }})" class="btn btn-primary">
+            <button type="button" class="btn btn-primary" data-action="generate">
                 AI生成を開始
             </button>
         </div>
@@ -105,7 +105,7 @@
                 <p class="text-caption text-gray-500">記事をSALON BOARDに投稿します</p>
                 {% endif %}
             </div>
-            <button onclick="blogActions.publish({{ post.pk }})" class="btn btn-primary">
+            <button type="button" class="btn btn-primary" data-action="publish">
                 投稿を開始
             </button>
         </div>
@@ -254,7 +254,23 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        window.blogWS.connect({{ post.pk }});
+        const root = document.getElementById('post-detail');
+        const postId = root ? Number(root.dataset.postId) : null;
+        if (!postId) {
+            return;
+        }
+
+        const generateBtn = document.querySelector('[data-action="generate"]');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => blogActions.generate(postId));
+        }
+
+        const publishBtn = document.querySelector('[data-action="publish"]');
+        if (publishBtn) {
+            publishBtn.addEventListener('click', () => blogActions.publish(postId));
+        }
+
+        window.blogWS.connect(postId);
         
         window.blogWS.on('task_completed', (data) => {
             setTimeout(() => {

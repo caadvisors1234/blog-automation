@@ -29,6 +29,7 @@
                 <div>
                     <label for="title" class="block text-body font-medium text-gray-700 mb-2">
                         タイトル
+                        <span class="text-pink-500">*</span>
                         <span class="text-caption text-gray-400 font-normal ml-1">(最大25文字)</span>
                     </label>
                     <input type="text" id="title" name="title" maxlength="25"
@@ -36,6 +37,7 @@
                     <p class="text-caption text-gray-500 mt-1.5">
                         <span id="title-count">0</span> / 25文字
                     </p>
+                    <p id="title-error" class="text-caption text-red-600 mt-1.5 hidden">タイトルは必須です。</p>
                 </div>
 
                 <div>
@@ -47,6 +49,7 @@
                     <p class="text-caption text-gray-500 mt-1.5">
                         <span id="content-count">0</span> / 1000文字
                     </p>
+                    <p id="content-error" class="text-caption text-red-600 mt-1.5 hidden">本文は1000文字以内にしてください。</p>
                 </div>
 
                 <!-- Template Selection -->
@@ -101,6 +104,23 @@
         const contentTextarea = document.getElementById('content');
         const contentCount = document.getElementById('content-count');
         const submitBtn = document.querySelector('button[type="submit"]');
+        const titleError = document.getElementById('title-error');
+        const contentError = document.getElementById('content-error');
+        let hasTriedSubmit = false;
+
+        function setFieldError(field, errorEl, message, show) {
+            if (!field || !errorEl) return;
+            if (show) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+                field.classList.add('border-red-500', 'ring-1', 'ring-red-500/20');
+                field.setAttribute('aria-invalid', 'true');
+            } else {
+                errorEl.classList.add('hidden');
+                field.classList.remove('border-red-500', 'ring-1', 'ring-red-500/20');
+                field.removeAttribute('aria-invalid');
+            }
+        }
 
         // Update title character count
         function updateTitleCount() {
@@ -129,39 +149,72 @@
             if (count > 1000) {
                 contentCount.classList.add('text-red-600', 'font-medium');
                 contentCount.classList.remove('text-gray-500');
-                submitBtn.disabled = true;
-                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
             } else if (count > 900) {
                 contentCount.classList.add('text-yellow-600', 'font-medium');
                 contentCount.classList.remove('text-gray-500', 'text-red-600');
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
                 contentCount.classList.add('text-gray-500');
                 contentCount.classList.remove('text-yellow-600', 'text-red-600', 'font-medium');
-                submitBtn.disabled = false;
+            }
+        }
+
+        function validateForm(showErrors = false) {
+            const titleValue = titleInput.value.trim();
+            const contentValue = contentTextarea.value;
+            const titleMissing = titleValue.length === 0;
+            const titleTooLong = titleValue.length > 25;
+            const contentTooLong = contentValue.length > 1000;
+
+            const titleErrorMessage = titleMissing
+                ? 'タイトルは必須です。'
+                : 'タイトルは25文字以内にしてください。';
+
+            setFieldError(
+                titleInput,
+                titleError,
+                titleErrorMessage,
+                titleTooLong || (showErrors && titleMissing)
+            );
+            setFieldError(contentTextarea, contentError, '本文は1000文字以内にしてください。', contentTooLong);
+
+            const isValid = !titleMissing && !titleTooLong && !contentTooLong;
+            submitBtn.disabled = !isValid;
+            if (!isValid) {
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
                 submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
+
+            return isValid;
         }
 
         // Initialize counts on page load
         updateTitleCount();
         updateContentCount();
+        validateForm();
 
         // Update counts on input
-        titleInput.addEventListener('input', updateTitleCount);
-        contentTextarea.addEventListener('input', updateContentCount);
+        titleInput.addEventListener('input', () => {
+            updateTitleCount();
+            validateForm(hasTriedSubmit);
+        });
+        contentTextarea.addEventListener('input', () => {
+            updateContentCount();
+            validateForm(hasTriedSubmit);
+        });
 
         // Prevent form submission if validation fails
         document.querySelector('form').addEventListener('submit', function(e) {
-            if (titleInput.value.length > 25) {
+            hasTriedSubmit = true;
+            if (!validateForm(true)) {
                 e.preventDefault();
-                alert('タイトルは25文字以内にしてください。');
-                return false;
-            }
-            if (contentTextarea.value.length > 1000) {
-                e.preventDefault();
-                alert('本文は1000文字以内にしてください。');
+                if (!titleInput.value.trim()) {
+                    titleInput.focus();
+                } else if (titleInput.value.trim().length > 25) {
+                    titleInput.focus();
+                } else if (contentTextarea.value.length > 1000) {
+                    contentTextarea.focus();
+                }
                 return false;
             }
         });

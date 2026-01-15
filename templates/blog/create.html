@@ -46,6 +46,7 @@
                         <span class="text-pink-500">*</span>
                     </label>
                     <input type="text" id="keywords" name="keywords" required placeholder="例: 春のヘアスタイル, パーマ, トリートメント">
+                    <p id="keywords-error" class="text-caption text-red-600 mt-1.5 hidden">キーワードは必須です。</p>
                     <p class="text-caption text-gray-400 mt-1.5">
                         カンマ区切りで複数指定できます。AIがこのキーワードとアップロードした画像をもとにタイトルと記事を自動生成します。</p>
                 </div>
@@ -115,16 +116,19 @@
                 <div>
                     <label for="stylist_id" class="block text-body font-medium text-gray-700 mb-2">
                         スタイリスト
+                        <span class="text-pink-500">*</span>
                     </label>
                     {% if stylists %}
-                    <select id="stylist_id" name="stylist_id">
+                    <select id="stylist_id" name="stylist_id" required>
                         <option value="">選択してください</option>
                         {% for stylist in stylists %}
                         <option value="{{ stylist.stylist_id }}">{{ stylist.name }}</option>
                         {% endfor %}
                     </select>
+                    <p id="stylist-error" class="text-caption text-red-600 mt-1.5 hidden">スタイリストは必須です。</p>
                     {% else %}
-                    <input type="text" id="stylist_id" name="stylist_id" placeholder="スタイリストID">
+                    <input type="text" id="stylist_id" name="stylist_id" placeholder="スタイリストID" required>
+                    <p id="stylist-error" class="text-caption text-red-600 mt-1.5 hidden">スタイリストは必須です。</p>
                     <p class="text-caption text-gray-400 mt-1.5">HPB設定がない場合は手動入力</p>
                     {% endif %}
                 </div>
@@ -133,16 +137,19 @@
                 <div>
                     <label for="coupon_name" class="block text-body font-medium text-gray-700 mb-2">
                         クーポン
+                        <span class="text-pink-500">*</span>
                     </label>
                     {% if coupons %}
-                    <select id="coupon_name" name="coupon_name">
+                    <select id="coupon_name" name="coupon_name" required>
                         <option value="">選択してください</option>
                         {% for coupon in coupons %}
                         <option value="{{ coupon }}">{{ coupon }}</option>
                         {% endfor %}
                     </select>
+                    <p id="coupon-error" class="text-caption text-red-600 mt-1.5 hidden">クーポンは必須です。</p>
                     {% else %}
-                    <input type="text" id="coupon_name" name="coupon_name" placeholder="クーポン名">
+                    <input type="text" id="coupon_name" name="coupon_name" placeholder="クーポン名" required>
+                    <p id="coupon-error" class="text-caption text-red-600 mt-1.5 hidden">クーポンは必須です。</p>
                     <p class="text-caption text-gray-400 mt-1.5">HPB設定がない場合は手動入力</p>
                     {% endif %}
                 </div>
@@ -274,9 +281,27 @@
         const keywordsInput = document.getElementById('keywords');
         const stylistInput = document.getElementById('stylist_id');
         const couponInput = document.getElementById('coupon_name');
+        const keywordsError = document.getElementById('keywords-error');
+        const stylistError = document.getElementById('stylist-error');
+        const couponError = document.getElementById('coupon-error');
+        let hasTriedSubmit = false;
+
+        function setFieldError(field, errorEl, message, show) {
+            if (!field || !errorEl) return;
+            if (show) {
+                errorEl.textContent = message;
+                errorEl.classList.remove('hidden');
+                field.classList.add('border-red-500', 'ring-1', 'ring-red-500/20');
+                field.setAttribute('aria-invalid', 'true');
+            } else {
+                errorEl.classList.add('hidden');
+                field.classList.remove('border-red-500', 'ring-1', 'ring-red-500/20');
+                field.removeAttribute('aria-invalid');
+            }
+        }
 
         // Validation function to check if all required fields are filled
-        function validateForm() {
+        function validateForm(showErrors = false) {
             const keywordsFilled = keywordsInput.value.trim().length > 0;
             const stylistFilled = stylistInput.value.trim().length > 0;
             const couponFilled = couponInput.value.trim().length > 0;
@@ -293,6 +318,16 @@
                 submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
 
+            if (showErrors) {
+                setFieldError(keywordsInput, keywordsError, 'キーワードは必須です。', !keywordsFilled);
+                setFieldError(stylistInput, stylistError, 'スタイリストは必須です。', !stylistFilled);
+                setFieldError(couponInput, couponError, 'クーポンは必須です。', !couponFilled);
+            } else {
+                setFieldError(keywordsInput, keywordsError, '', false);
+                setFieldError(stylistInput, stylistError, '', false);
+                setFieldError(couponInput, couponError, '', false);
+            }
+
             return isValid;
         }
 
@@ -300,16 +335,25 @@
         validateForm();
 
         // Run validation when inputs change
-        keywordsInput.addEventListener('input', validateForm);
-        stylistInput.addEventListener('change', validateForm);
-        couponInput.addEventListener('change', validateForm);
+        keywordsInput.addEventListener('input', () => validateForm(hasTriedSubmit));
+        stylistInput.addEventListener('input', () => validateForm(hasTriedSubmit));
+        stylistInput.addEventListener('change', () => validateForm(hasTriedSubmit));
+        couponInput.addEventListener('input', () => validateForm(hasTriedSubmit));
+        couponInput.addEventListener('change', () => validateForm(hasTriedSubmit));
 
         form.addEventListener('submit', function (e) {
             e.preventDefault();
+            hasTriedSubmit = true;
 
             // Validate form before submission
-            if (!validateForm()) {
-                alert('キーワード、スタイリスト、クーポンは全て必須です。');
+            if (!validateForm(true)) {
+                if (!keywordsInput.value.trim()) {
+                    keywordsInput.focus();
+                } else if (!stylistInput.value.trim()) {
+                    stylistInput.focus();
+                } else if (!couponInput.value.trim()) {
+                    couponInput.focus();
+                }
                 return;
             }
 

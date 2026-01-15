@@ -4,7 +4,7 @@
 {% block title %}AI記事生成中 - HPB Blog Automation{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto px-6 lg:px-8 py-10">
+<div id="post-generating" data-post-id="{{ post.pk }}" class="max-w-2xl mx-auto px-6 lg:px-8 py-10">
     <!-- Header -->
     <header class="mb-10 text-center">
         <h1 class="text-display text-gray-900 mb-4">AI記事生成中</h1>
@@ -63,7 +63,11 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const postId = {{ post.pk }};
+        const root = document.getElementById('post-generating');
+        const postId = root ? Number(root.dataset.postId) : null;
+        if (!postId) {
+            return;
+        }
         const progressBar = document.getElementById('progress-bar');
         const progressMessage = document.getElementById('progress-message');
         const progressPercent = document.getElementById('progress-percent');
