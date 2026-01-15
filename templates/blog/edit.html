@@ -240,12 +240,12 @@
             });
 
             // Add template to content
-            addTemplateBtn.addEventListener('click', function() {
+            addTemplateBtn.addEventListener('click', async function() {
                 const selectedOption = templateSelect.options[templateSelect.selectedIndex];
                 const templateContent = selectedOption.getAttribute('data-content');
 
                 if (!templateContent) {
-                    alert('テンプレートを選択してください。');
+                    await window.dialog.alert('テンプレート未選択', 'テンプレートを選択してください。');
                     return;
                 }
 
@@ -255,20 +255,21 @@
                 const newContent = currentContent + separator + templateContent;
 
                 if (newContent.length > 1000) {
-                    alert('テンプレートを追加すると1000文字を超えてしまいます。本文を短くしてから追加してください。');
+                    await window.dialog.alert('文字数超過', 'テンプレートを追加すると1000文字を超えてしまいます。本文を短くしてから追加してください。');
                     return;
                 }
 
                 // Add template to content
                 contentTextarea.value = newContent;
                 updateContentCount();
+                validateForm(hasTriedSubmit);
 
                 // Reset selection
                 templateSelect.selectedIndex = 0;
                 templatePreview.classList.add('hidden');
 
                 // Show success message
-                alert('テンプレートを追加しました。');
+                window.toast.success('テンプレートを追加しました');
             });
         }
     });

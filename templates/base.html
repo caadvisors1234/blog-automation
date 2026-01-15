@@ -75,7 +75,74 @@
   </div>
 
   <!-- Toast Container -->
-  <div id="toast-container" class="fixed bottom-6 right-6 z-50 space-y-3"></div>
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 space-y-3 max-w-sm w-full px-4 sm:px-0"></div>
+
+  <!-- Image Lightbox Modal -->
+  <div id="lightbox-modal" class="fixed inset-0 z-[70] hidden" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-gray-900/90 backdrop-blur-sm transition-opacity" id="lightbox-backdrop"></div>
+
+    <div class="relative flex items-center justify-center min-h-full p-4">
+      <!-- Close button -->
+      <button id="lightbox-close" class="absolute top-4 right-4 p-3 text-white/80 hover:text-white transition-colors z-10"
+              aria-label="閉じる">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+
+      <!-- Navigation buttons -->
+      <button id="lightbox-prev" class="absolute left-4 p-3 text-white/80 hover:text-white transition-colors z-10 hidden"
+              aria-label="前の画像">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+      </button>
+      <button id="lightbox-next" class="absolute right-4 p-3 text-white/80 hover:text-white transition-colors z-10 hidden"
+              aria-label="次の画像">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </button>
+
+      <!-- Image container -->
+      <div class="max-w-4xl max-h-[85vh] flex items-center justify-center">
+        <img id="lightbox-image" src="" alt="" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl">
+      </div>
+
+      <!-- Image counter -->
+      <div id="lightbox-counter" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/80 text-body">
+        <!-- e.g., "1 / 4" -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Dialog Modal -->
+  <div id="dialog-modal" class="fixed inset-0 z-[60] hidden" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity" id="dialog-backdrop"></div>
+
+    <div class="relative flex items-center justify-center min-h-full p-4">
+      <div class="bg-white rounded-xl w-full max-w-md shadow-modal overflow-hidden transform transition-all"
+           id="dialog-content">
+        <!-- Icon -->
+        <div class="pt-6 pb-2 text-center">
+          <div id="dialog-icon" class="w-12 h-12 mx-auto rounded-full flex items-center justify-center">
+            <!-- Icon will be inserted by JS -->
+          </div>
+        </div>
+
+        <!-- Text -->
+        <div class="px-6 pb-6 text-center">
+          <h3 id="dialog-title" class="text-title text-gray-900 mb-2"></h3>
+          <p id="dialog-message" class="text-body text-gray-600"></p>
+        </div>
+
+        <!-- Actions -->
+        <div id="dialog-actions" class="flex border-t border-gray-100">
+          <!-- Buttons will be inserted by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Progress Modal (Assistant Style) -->
   <div id="progress-modal" class="fixed inset-0 z-50 hidden transition-opacity duration-300 opacity-0"

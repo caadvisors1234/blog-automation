@@ -200,7 +200,7 @@
         // Copy functionality
         const copyBtn = document.getElementById('copy-previous-btn');
         if (copyBtn) {
-            copyBtn.addEventListener('click', function () {
+            copyBtn.addEventListener('click', async function () {
                 // Last post data from context
                 const lastPostData = {
                     keywords: "{{ last_post.keywords|default:''|escapejs }}",
@@ -209,7 +209,13 @@
                     coupon_name: "{{ last_post.coupon_name|default:''|escapejs }}"
                 };
 
-                if (confirm('前回の投稿設定（キーワード、プロンプト、スタイリスト、クーポン）をコピーしますか？\n入力中の内容は上書きされます。')) {
+                const confirmed = await window.dialog.confirm(
+                    '前回の設定をコピー',
+                    '前回の投稿設定（キーワード、プロンプト、スタイリスト、クーポン）をコピーしますか？入力中の内容は上書きされます。',
+                    { confirmText: 'コピー' }
+                );
+
+                if (confirmed) {
                     const keywordsInput = document.getElementById('keywords');
                     const promptInput = document.getElementById('ai_prompt');
                     const stylistInput = document.getElementById('stylist_id');
@@ -235,17 +241,8 @@
                         couponInput.dispatchEvent(new Event('change'));
                     }
 
-                    // Show small toast/feedback
-                    const originalText = copyBtn.innerHTML;
-                    copyBtn.innerHTML = `
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        コピーしました
-                    `;
-                    setTimeout(() => {
-                        copyBtn.innerHTML = originalText;
-                    }, 2000);
+                    // Show toast feedback
+                    window.toast.success('前回の設定をコピーしました');
                 }
             });
         }
@@ -407,27 +404,27 @@
                         console.log('Redirecting to:', data.redirect_url, 'with', data.image_count, 'images');
                         window.location.href = data.redirect_url;
                     } else if (data.error) {
-                        alert(data.error);
-                        submitBtn.disabled = false;
-                        submitBtn.innerHTML = `
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                        AIで記事を生成
-                    `;
+                        window.toast.error(data.error);
+                        resetSubmitButton();
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('エラーが発生しました。再度お試しください。');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = `
+                    window.toast.error('エラーが発生しました。再度お試しください。');
+                    resetSubmitButton();
+                });
+
+            function resetSubmitButton() {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitBtn.innerHTML = `
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                     </svg>
                     AIで記事を生成
                 `;
-                });
+                validateForm(hasTriedSubmit);
+            }
         });
     });
 </script>

@@ -119,9 +119,7 @@
                 </button>
                 
                 {% if salon_account %}
-                <button type="submit" name="action" value="delete_salon_board" 
-                        class="btn btn-danger"
-                        onclick="return confirm('SALON BOARD連携を解除しますか？')">
+                <button type="button" id="delete-salon-board-btn" class="btn btn-danger">
                     連携解除
                 </button>
                 {% endif %}
@@ -178,13 +176,13 @@
             <div class="p-6 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
                 <div class="flex items-start justify-between mb-3">
                     <h4 class="text-body font-medium text-gray-900">{{ template.name }}</h4>
-                    <form method="post" class="inline">
+                    <form method="post" class="inline template-delete-form">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="delete_template">
                         <input type="hidden" name="template_id" value="{{ template.id }}">
-                        <button type="submit"
-                                onclick="return confirm('このテンプレートを削除しますか？')"
-                                class="text-caption text-red-600 hover:text-red-700 font-medium transition-colors">
+                        <button type="button"
+                                class="template-delete-btn text-caption text-red-600 hover:text-red-700 font-medium transition-colors"
+                                data-template-name="{{ template.name }}">
                             削除
                         </button>
                     </form>
@@ -256,6 +254,67 @@
             // Update count on input
             templateContent.addEventListener('input', updateTemplateCount);
         }
+
+        // SALON BOARD connection delete handler
+        const deleteSalonBtn = document.getElementById('delete-salon-board-btn');
+        if (deleteSalonBtn) {
+            deleteSalonBtn.addEventListener('click', async function() {
+                const confirmed = await window.dialog.danger(
+                    'SALON BOARD連携を解除',
+                    'SALON BOARD連携を解除しますか？自動投稿機能が使用できなくなります。',
+                    { confirmText: '連携解除' }
+                );
+
+                if (confirmed) {
+                    // Create and submit the hidden form
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.innerHTML = `
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${document.querySelector('[name=csrfmiddlewaretoken]').value}">
+                        <input type="hidden" name="action" value="delete_salon_board">
+                    `;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+
+        // Template delete handlers
+        document.querySelectorAll('.template-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const templateName = this.dataset.templateName;
+                const form = this.closest('.template-delete-form');
+
+                const confirmed = await window.dialog.danger(
+                    'テンプレートを削除',
+                    `「${templateName}」を削除しますか？この操作は取り消せません。`,
+                    { confirmText: '削除' }
+                );
+
+                if (confirmed && form) {
+                    form.submit();
+                }
+            });
+        });
+
+        // Add loading state to all submit buttons in forms
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const submitBtn = this.querySelector('button[type="submit"]');
+                if (submitBtn && !submitBtn.disabled) {
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = `
+                        <svg class="animate-spin w-5 h-5 mr-2 inline" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        処理中...
+                    `;
+                    submitBtn.classList.add('opacity-75');
+                }
+            });
+        });
     });
 </script>
 {% endblock %}

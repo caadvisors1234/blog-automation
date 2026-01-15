@@ -45,38 +45,49 @@
     <!-- Article Variations -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {% for variation in variations %}
-        <div class="card hover:border-pink-300 transition-colors cursor-pointer article-card" 
-             data-variation-id="{{ variation.id }}"
-             onclick="selectArticle({{ variation.id }})">
+        <div class="card border-2 border-transparent hover:border-pink-200 transition-all duration-200 article-card relative"
+             data-variation-id="{{ variation.id }}">
+            <!-- Selection indicator -->
+            <div class="absolute -top-3 -right-3 w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center shadow-lg article-check hidden transform scale-0 transition-transform duration-200"
+                 id="check-{{ variation.id }}">
+                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+
             <!-- Header -->
             <div class="flex items-center justify-between mb-4">
-                <span class="text-caption font-medium text-pink-500">案 {{ variation.id }}</span>
-                <div class="w-6 h-6 border-2 border-gray-300 rounded-full flex items-center justify-center article-check"
-                     id="check-{{ variation.id }}">
-                    <svg class="w-4 h-4 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-caption font-medium bg-pink-50 text-pink-600">
+                    案 {{ variation.id }}
+                </span>
+                <span class="text-caption text-gray-400">{{ variation.content|length }}文字</span>
             </div>
-            
+
             <!-- Title -->
             <h3 class="text-title text-gray-900 mb-3 line-clamp-2">{{ variation.title }}</h3>
-            
+
             <!-- Content Preview -->
-            <div class="text-body text-gray-600 leading-relaxed article-content" style="max-height: 300px; overflow-y: auto;">
+            <div class="text-body text-gray-600 leading-relaxed article-content mb-4" style="max-height: 200px; overflow-y: auto;">
                 {{ variation.content|linebreaksbr }}
             </div>
-            
-            <!-- Footer -->
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <div class="flex justify-between text-caption text-gray-400">
-                    <span>{{ variation.content|length }}文字</span>
-                    <button type="button" 
-                            onclick="event.stopPropagation(); openPreview({{ variation.id }})"
-                            class="text-pink-500 hover:text-pink-700 transition-colors">
-                        全文を見る
-                    </button>
-                </div>
+
+            <!-- Actions -->
+            <div class="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                <button type="button"
+                        onclick="openPreview({{ variation.id }})"
+                        class="text-caption text-gray-500 hover:text-gray-700 transition-colors flex items-center min-h-[44px]">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                    全文を見る
+                </button>
+                <button type="button"
+                        onclick="selectArticle({{ variation.id }})"
+                        class="btn btn-primary text-sm py-2 px-4 select-btn"
+                        id="select-btn-{{ variation.id }}">
+                    この案を選択
+                </button>
             </div>
         </div>
         {% endfor %}
@@ -150,30 +161,67 @@
         // Update selection
         selectedId = id;
         document.getElementById('selected-variation-id').value = id;
-        
+
         // Update UI
         document.querySelectorAll('.article-card').forEach(card => {
             const cardId = parseInt(card.dataset.variationId);
             const check = document.getElementById(`check-${cardId}`);
-            
+            const selectBtn = document.getElementById(`select-btn-${cardId}`);
+
             if (cardId === id) {
-                card.classList.add('border-pink-500', 'ring-2', 'ring-pink-200');
-                check.classList.remove('border-gray-300');
-                check.classList.add('bg-pink-500', 'border-pink-500');
-                check.querySelector('svg').classList.remove('hidden');
+                // Selected state
+                card.classList.add('border-pink-500', 'bg-pink-50/30');
+                card.classList.remove('border-transparent', 'hover:border-pink-200');
+                check.classList.remove('hidden', 'scale-0');
+                check.classList.add('scale-100');
+                if (selectBtn) {
+                    selectBtn.textContent = '選択中';
+                    selectBtn.classList.remove('btn-primary');
+                    selectBtn.classList.add('btn-secondary', 'pointer-events-none');
+                }
             } else {
-                card.classList.remove('border-pink-500', 'ring-2', 'ring-pink-200');
-                check.classList.add('border-gray-300');
-                check.classList.remove('bg-pink-500', 'border-pink-500');
-                check.querySelector('svg').classList.add('hidden');
+                // Unselected state
+                card.classList.remove('border-pink-500', 'bg-pink-50/30');
+                card.classList.add('border-transparent', 'hover:border-pink-200');
+                check.classList.add('hidden', 'scale-0');
+                check.classList.remove('scale-100');
+                if (selectBtn) {
+                    selectBtn.textContent = 'この案を選択';
+                    selectBtn.classList.add('btn-primary');
+                    selectBtn.classList.remove('btn-secondary', 'pointer-events-none');
+                }
             }
         });
-        
+
         // Update status and button
         const variation = variations.find(v => v.id === id);
-        document.getElementById('selection-status').textContent = `案${id}「${variation.title.substring(0, 15)}...」を選択中`;
-        document.getElementById('selection-status').classList.remove('text-gray-400');
-        document.getElementById('selection-status').classList.add('text-pink-600');
+        const titlePreview = variation.title.length > 15 ? variation.title.substring(0, 15) + '...' : variation.title;
+
+        // Build status element safely to prevent XSS
+        const statusEl = document.getElementById('selection-status');
+        statusEl.innerHTML = '';
+
+        const span = document.createElement('span');
+        span.className = 'inline-flex items-center';
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'w-4 h-4 mr-1.5 text-pink-500');
+        svg.setAttribute('fill', 'currentColor');
+        svg.setAttribute('viewBox', '0 0 20 20');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('fill-rule', 'evenodd');
+        path.setAttribute('d', 'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z');
+        path.setAttribute('clip-rule', 'evenodd');
+        svg.appendChild(path);
+
+        const textNode = document.createTextNode(`案${id}「${titlePreview}」を選択中`);
+
+        span.appendChild(svg);
+        span.appendChild(textNode);
+        statusEl.appendChild(span);
+
+        statusEl.classList.remove('text-gray-400');
+        statusEl.classList.add('text-pink-600', 'font-medium');
         document.getElementById('confirm-btn').disabled = false;
     }
     
@@ -208,12 +256,28 @@
         }
     });
     
-    // Form validation
-    document.getElementById('select-form').addEventListener('submit', (e) => {
+    // Form validation and loading state
+    const selectForm = document.getElementById('select-form');
+    const confirmBtn = document.getElementById('confirm-btn');
+    const originalBtnText = confirmBtn.innerHTML;
+
+    selectForm.addEventListener('submit', async (e) => {
         if (!selectedId) {
             e.preventDefault();
-            alert('記事を選択してください');
+            await window.dialog.alert('記事未選択', '記事を選択してください。');
+            return;
         }
+
+        // Show loading state
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `
+            <svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            保存中...
+        `;
+        confirmBtn.classList.add('opacity-75');
     });
 </script>
 {% endblock %}

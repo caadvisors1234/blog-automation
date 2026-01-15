@@ -130,17 +130,30 @@
     {% if images %}
     <section class="card mb-8">
         <h2 class="text-title text-gray-900 mb-4">画像</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="image-gallery">
             {% for image in images %}
-            <div class="relative">
-                <img src="{{ image.image_url }}" alt="画像 {{ image.order }}" 
-                     class="w-full aspect-square object-cover rounded-lg">
-                <div class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white">
+            <div class="relative group">
+                <button type="button"
+                        class="w-full focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 rounded-lg"
+                        onclick="openImageLightbox({{ forloop.counter0 }})"
+                        aria-label="画像 {{ image.order }} を拡大表示">
+                    <img src="{{ image.image_url }}" alt="画像 {{ image.order }}"
+                         class="w-full aspect-square object-cover rounded-lg transition-transform duration-200 group-hover:scale-[1.02]"
+                         data-lightbox-src="{{ image.image_url }}"
+                         data-lightbox-alt="画像 {{ image.order }}">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-lg transition-colors flex items-center justify-center">
+                        <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                        </svg>
+                    </div>
+                </button>
+                <div class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white shadow-sm">
                     {{ image.order }}
                 </div>
             </div>
             {% endfor %}
         </div>
+        <p class="text-caption text-gray-400 mt-3">クリックで拡大表示</p>
     </section>
     {% endif %}
     
@@ -253,6 +266,21 @@
 
 {% block extra_js %}
 <script>
+    // Image lightbox function
+    function openImageLightbox(startIndex) {
+        const gallery = document.getElementById('image-gallery');
+        if (!gallery) return;
+
+        const images = Array.from(gallery.querySelectorAll('img[data-lightbox-src]')).map(img => ({
+            src: img.dataset.lightboxSrc,
+            alt: img.dataset.lightboxAlt || img.alt
+        }));
+
+        if (images.length > 0 && window.lightbox) {
+            window.lightbox.open(images[startIndex].src, images[startIndex].alt, images, startIndex);
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const root = document.getElementById('post-detail');
         const postId = root ? Number(root.dataset.postId) : null;

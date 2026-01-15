@@ -577,7 +577,12 @@ class BlogWebSocket {
      * @param {string} message - Success message
      */
     showSuccess(message) {
-        this.showToast(message, 'success');
+        // Use unified toast system from main.js
+        if (window.toast) {
+            window.toast.success(message);
+        } else {
+            console.log('[Success]', message);
+        }
     }
 
     /**
@@ -585,7 +590,12 @@ class BlogWebSocket {
      * @param {string} message - Error message
      */
     showError(message) {
-        this.showToast(message, 'error');
+        // Use unified toast system from main.js
+        if (window.toast) {
+            window.toast.error(message);
+        } else {
+            console.error('[Error]', message);
+        }
     }
 
     /**
@@ -594,73 +604,12 @@ class BlogWebSocket {
      * @param {string} type - Toast type (success, error, warning, info)
      */
     showToast(message, type = 'info') {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-
-        const colors = {
-            success: 'border-l-green-500 bg-white',
-            error: 'border-l-red-500 bg-white',
-            warning: 'border-l-yellow-500 bg-white',
-            info: 'border-l-pink-500 bg-white'
-        };
-
-        const icons = {
-            success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
-            error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>',
-            warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>',
-            info: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'
-        };
-
-        const iconColors = {
-            success: 'text-green-600',
-            error: 'text-red-600',
-            warning: 'text-yellow-600',
-            info: 'text-pink-600'
-        };
-
-        const signature = `${type}:${message}`;
-        const existing = Array.from(container.children).find(el => el.dataset.toastKey === signature);
-        if (existing) {
-            // Reset timer by removing and re-adding fade animation
-            existing.style.opacity = '1';
-            existing.style.transform = 'translateX(0)';
-            existing.dataset.toastTimestamp = Date.now();
-            return;
+        // Use unified toast system from main.js
+        if (window.toast) {
+            window.toast.show(message, type);
+        } else {
+            console.log(`[${type}]`, message);
         }
-
-        // Limit total toasts
-        const maxToasts = 3;
-        while (container.children.length >= maxToasts) {
-            container.removeChild(container.firstChild);
-        }
-
-        const toast = document.createElement('div');
-        toast.className = `rounded-lg p-4 border-l-4 shadow-card ${colors[type]} animate-slide-up max-w-sm`;
-        toast.dataset.toastKey = signature;
-        toast.dataset.toastTimestamp = Date.now();
-        toast.innerHTML = `
-            <div class="flex items-start space-x-3">
-                <svg class="w-5 h-5 ${iconColors[type]} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    ${icons[type]}
-                </svg>
-                <p class="text-body text-gray-700 flex-1">${message}</p>
-                <button onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-        `;
-
-        container.appendChild(toast);
-
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100px)';
-            toast.style.transition = 'all 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 5000);
     }
 }
 
