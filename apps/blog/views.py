@@ -4,6 +4,7 @@ Blog post management views
 """
 
 import logging
+import re
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from .models import BlogPost, BlogImage, PostLog, BlogPostTemplate
@@ -21,6 +22,7 @@ from .serializers import (
     BlogPostCreateSerializer,
     BlogPostUpdateSerializer,
     BlogImageSerializer,
+    BlogImageReorderSerializer,
     PostLogSerializer,
     MAX_IMAGES_PER_POST,
 )
@@ -325,6 +327,7 @@ class BlogImageViewSet(viewsets.ModelViewSet):
     - GET /api/blog/images/{id}/ - Get specific image
     - PATCH /api/blog/images/{id}/ - Update image (order)
     - DELETE /api/blog/images/{id}/ - Delete image
+    - POST /api/blog/images/reorder/ - Reorder images for a post
     """
     serializer_class = BlogImageSerializer
     permission_classes = [IsAuthenticated]
@@ -339,6 +342,38 @@ class BlogImageViewSet(viewsets.ModelViewSet):
         return BlogImage.objects.filter(
             blog_post__user=self.request.user
         ).select_related('blog_post')
+
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request):
+        """
+        Reorder images for a blog post.
+        """
+        serializer = BlogImageReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        post_id = serializer.validated_data['post_id']
+        orders = serializer.validated_data['orders']
+        image_ids = [item['id'] for item in orders]
+
+        post = get_object_or_404(BlogPost, pk=post_id, user=request.user)
+        images = BlogImage.objects.filter(blog_post=post, id__in=image_ids)
+        total_images = post.images.count()
+
+        if images.count() != len(orders) or total_images != len(orders):
+            return Response(
+                {'detail': 'All images for the post must be included.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            post.images.update(order=models.F('order') + 1000)
+            for item in orders:
+                BlogImage.objects.filter(
+                    id=item['id'],
+                    blog_post=post
+                ).update(order=item['order'])
+
+        return Response({'detail': 'Image order updated.'})
 
 
 class PostLogViewSet(viewsets.ReadOnlyModelViewSet):
@@ -691,11 +726,41 @@ def post_detail(request, pk):
     post = get_object_or_404(BlogPost, pk=pk, user=request.user)
     images = post.images.all().order_by('order')
     logs = PostLog.objects.filter(blog_post=post).order_by('-started_at')[:10]
+
+    preview_blocks = []
+    if post.content:
+        parts = re.split(r'(\{\{image_(\d+)\}\})', post.content)
+        idx = 0
+        while idx < len(parts):
+            part = parts[idx]
+            if part and part.startswith('{{image_'):
+                image_index_str = parts[idx + 1]
+                image_index = int(image_index_str) - 1
+                if 0 <= image_index < len(images):
+                    preview_blocks.append({
+                        'type': 'image',
+                        'url': images[image_index].image_url,
+                        'alt': f'画像 {image_index + 1}'
+                    })
+                else:
+                    preview_blocks.append({
+                        'type': 'text',
+                        'text': part
+                    })
+                idx += 2
+            else:
+                if part:
+                    preview_blocks.append({
+                        'type': 'text',
+                        'text': part
+                    })
+                idx += 1
     
     context = {
         'post': post,
         'images': images,
         'logs': logs,
+        'preview_blocks': preview_blocks,
     }
     
     return render(request, 'blog/detail.html', context)
@@ -708,6 +773,7 @@ def post_edit(request, pk):
     Only allows editing title and content.
     """
     post = get_object_or_404(BlogPost, pk=pk, user=request.user)
+    images = post.images.all().order_by('order')
 
     if request.method == 'POST':
         # Get form data
@@ -738,6 +804,7 @@ def post_edit(request, pk):
     context = {
         'post': post,
         'templates': templates,
+        'images': images,
     }
 
     return render(request, 'blog/edit.html', context)

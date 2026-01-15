@@ -35,6 +35,39 @@ class BlogImageSerializer(serializers.ModelSerializer):
         ]
 
 
+class BlogImageOrderItemSerializer(serializers.Serializer):
+    """
+    Serializer for image order updates.
+    """
+    id = serializers.IntegerField()
+    order = serializers.IntegerField(min_value=0, max_value=MAX_IMAGES_PER_POST - 1)
+
+
+class BlogImageReorderSerializer(serializers.Serializer):
+    """
+    Serializer for image reorder requests.
+    """
+    post_id = serializers.IntegerField()
+    orders = BlogImageOrderItemSerializer(many=True)
+
+    def validate_orders(self, value):
+        """Ensure image IDs and order values are unique."""
+        ids = [item['id'] for item in value]
+        orders = [item['order'] for item in value]
+
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError('Image IDs must be unique.')
+
+        if len(orders) != len(set(orders)):
+            raise serializers.ValidationError('Order values must be unique.')
+
+        expected_orders = set(range(len(orders)))
+        if set(orders) != expected_orders:
+            raise serializers.ValidationError('Order values must be sequential starting from 0.')
+
+        return value
+
+
 class BlogPostListSerializer(serializers.ModelSerializer):
     """
     Serializer for blog post list view

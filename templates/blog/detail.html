@@ -163,7 +163,7 @@
     <section class="card mb-8">
         <h2 class="text-title text-gray-900 mb-4">本文</h2>
         {% if post.content %}
-        <div class="text-body text-gray-700 whitespace-pre-wrap leading-relaxed">{{ post.content }}</div>
+        <div class="text-body text-gray-700 whitespace-pre-wrap leading-relaxed">{% for block in preview_blocks %}{% if block.type == 'text' %}<span class="whitespace-pre-wrap">{{ block.text }}</span>{% elif block.type == 'image' %}<img src="{{ block.url }}" alt="{{ block.alt }}" class="block w-full max-w-sm mx-auto rounded-lg my-3">{% endif %}{% endfor %}</div>
         {% else %}
         <p class="text-body text-gray-400">（本文未生成）</p>
         {% endif %}

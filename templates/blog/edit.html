@@ -83,6 +83,45 @@
             </div>
         </section>
 
+        {% if images %}
+        <section class="card">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                <h2 class="text-title text-gray-900">画像の並び替え</h2>
+                <p class="text-caption text-gray-400">ドラッグ＆ドロップで順番変更（自動保存）</p>
+            </div>
+            <div id="image-reorder-list" class="grid grid-cols-2 sm:grid-cols-4 gap-4" data-post-id="{{ post.pk }}">
+                {% for image in images %}
+                <div class="relative group cursor-move" draggable="true"
+                     data-image-id="{{ image.id }}" data-image-url="{{ image.image_url }}">
+                    <img src="{{ image.image_url }}" alt="画像 {{ image.order }}"
+                         class="w-full aspect-square object-cover rounded-lg border border-gray-200">
+                    <div
+                        class="absolute top-2 left-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-xs font-medium text-white shadow-sm image-order-badge">
+                        {{ forloop.counter }}
+                    </div>
+                    <div class="absolute top-2 right-2 w-6 h-6 bg-white/80 rounded-full flex items-center justify-center text-gray-500 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 9h16M4 15h16"></path>
+                        </svg>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="card">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                <h2 class="text-title text-gray-900">プレビュー</h2>
+                <p class="text-caption text-gray-400">保存前に表示を確認できます</p>
+            </div>
+            <div class="space-y-3">
+                <h3 id="preview-title" class="text-title text-gray-900"></h3>
+                <div id="preview-content" class="text-body text-gray-700 whitespace-pre-wrap leading-relaxed"></div>
+            </div>
+        </section>
+
         <!-- Actions -->
         <div class="flex flex-col sm:flex-row gap-4">
             <button type="submit" class="btn btn-primary flex-1 sm:flex-none">
@@ -263,6 +302,7 @@
                 contentTextarea.value = newContent;
                 updateContentCount();
                 validateForm(hasTriedSubmit);
+                renderPreview();
 
                 // Reset selection
                 templateSelect.selectedIndex = 0;
@@ -270,6 +310,133 @@
 
                 // Show success message
                 window.toast.success('テンプレートを追加しました');
+            });
+        }
+
+        const previewTitle = document.getElementById('preview-title');
+        const previewContent = document.getElementById('preview-content');
+        const imageReorderList = document.getElementById('image-reorder-list');
+
+        function getOrderedImages() {
+            if (!imageReorderList) return [];
+            return Array.from(imageReorderList.querySelectorAll('[data-image-id]')).map(item => ({
+                id: Number(item.dataset.imageId),
+                url: item.dataset.imageUrl
+            }));
+        }
+
+        function updateOrderBadges() {
+            if (!imageReorderList) return;
+            Array.from(imageReorderList.querySelectorAll('.image-order-badge')).forEach((badge, index) => {
+                badge.textContent = index + 1;
+            });
+        }
+
+        function renderPreview() {
+            if (!previewTitle || !previewContent) return;
+
+            previewTitle.textContent = titleInput.value.trim() || '（タイトル未設定）';
+            previewContent.textContent = '';
+
+            const content = contentTextarea.value || '';
+            if (!content.trim()) {
+                previewContent.textContent = '（本文未入力）';
+                return;
+            }
+
+            const images = getOrderedImages();
+            const regex = /\{\{image_(\d+)\}\}/g;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = regex.exec(content)) !== null) {
+                const textPart = content.slice(lastIndex, match.index);
+                if (textPart) {
+                    previewContent.appendChild(document.createTextNode(textPart));
+                }
+
+                const imageIndex = Number(match[1]) - 1;
+                const image = images[imageIndex];
+                if (image && image.url) {
+                    const img = document.createElement('img');
+                    img.src = image.url;
+                    img.alt = `画像 ${imageIndex + 1}`;
+                    img.className = 'block w-full max-w-sm mx-auto rounded-lg my-3';
+                    previewContent.appendChild(img);
+                } else {
+                    const placeholder = document.createElement('span');
+                    placeholder.textContent = match[0];
+                    placeholder.className = 'text-gray-400';
+                    previewContent.appendChild(placeholder);
+                }
+
+                lastIndex = match.index + match[0].length;
+            }
+
+            const tail = content.slice(lastIndex);
+            if (tail) {
+                previewContent.appendChild(document.createTextNode(tail));
+            }
+        }
+
+        if (previewTitle && previewContent) {
+            renderPreview();
+            ['input', 'change', 'keyup', 'compositionend'].forEach(eventName => {
+                titleInput.addEventListener(eventName, renderPreview);
+                contentTextarea.addEventListener(eventName, renderPreview);
+            });
+        }
+
+        if (imageReorderList) {
+            let draggedItem = null;
+            let lastSignature = getOrderedImages().map(img => img.id).join(',');
+            const postId = imageReorderList.dataset.postId;
+            const saveOrder = debounce(async () => {
+                if (!postId) return;
+                const orders = getOrderedImages().map((img, index) => ({
+                    id: img.id,
+                    order: index
+                }));
+
+                try {
+                    await api.post('/blog/images/reorder/', {
+                        post_id: Number(postId),
+                        orders
+                    });
+                    window.toast.success('画像の並び順を保存しました');
+                } catch (error) {
+                    window.toast.error(`画像の並び順の保存に失敗しました: ${error.message}`);
+                }
+            }, 300);
+
+            imageReorderList.addEventListener('dragstart', (event) => {
+                const item = event.target.closest('[data-image-id]');
+                if (!item) return;
+                draggedItem = item;
+                item.classList.add('opacity-60');
+                event.dataTransfer.effectAllowed = 'move';
+            });
+
+            imageReorderList.addEventListener('dragend', () => {
+                if (!draggedItem) return;
+                draggedItem.classList.remove('opacity-60');
+                draggedItem = null;
+                const signature = getOrderedImages().map(img => img.id).join(',');
+                if (signature !== lastSignature) {
+                    lastSignature = signature;
+                    updateOrderBadges();
+                    renderPreview();
+                    saveOrder();
+                }
+            });
+
+            imageReorderList.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                const target = event.target.closest('[data-image-id]');
+                if (!target || target === draggedItem) return;
+                const rect = target.getBoundingClientRect();
+                const insertAfter = (event.clientY - rect.top) > rect.height / 2;
+                imageReorderList.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
             });
         }
     });
