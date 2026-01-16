@@ -117,6 +117,12 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
         guidance = """記事タイプを判断して執筆すること：
 - How to/ポイント解説系: 手順やコツを整理し、読者がすぐ実践できる形にする
 - スタイルまとめ系: トレンドやデザイン例を複数提示し、雰囲気が伝わるようにする"""
+        seo_guidance = """SEO観点の要件：
+- 提供されたキーワードを軸にタイトル・冒頭2〜3文・本文へ自然に含める
+- サブキーワード（言い換え/悩み語/効果語/対象）を2〜4語、無理なく散りばめる
+- 冒頭は共感と結論（どう改善できるか）を短く提示する
+- 本文は3〜4段落で「施術の特徴/流れ」「効果・持続/頻度」「注意点/ホームケア」「予約導線」を簡潔に触れる
+- 事実の捏造は禁止。キーワードやテンプレにない固有名詞・数値は書かない"""
 
         image_filenames_text = ""
         if image_paths:
@@ -136,6 +142,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 - 可能であれば「{current_year}年版」を自然に含める
 - 本文は400〜500文字程度（最大800文字厳守）
 - {guidance}
+- {seo_guidance}
 - 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
 - キーワードを自然に含め、読者が行動したくなるように導く
 {image_filenames_text}
@@ -157,6 +164,7 @@ def generate_blog_content_task(self, post_id: int, template_id: str = ''):
 - 可能であれば「{current_year}年版」を自然に含める
 - 本文は500〜600文字程度（最大1000文字厳守）
 - {guidance}
+- {seo_guidance}
 - 添付した画像の内容を踏まえ、適切な位置にプレースホルダーを配置する
 - キーワードを自然に含め、読者が行動したくなるように導く
 {image_filenames_text}
