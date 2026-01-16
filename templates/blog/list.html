@@ -121,6 +121,51 @@
         </article>
         {% endfor %}
     </section>
+    {% if is_paginated %}
+    <nav class="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" aria-label="ページング">
+        <div class="text-caption text-gray-500">
+            {{ paginator.count }}件中 {{ page_obj.start_index }}-{{ page_obj.end_index }}件
+        </div>
+        <div class="flex items-center flex-wrap gap-1">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
+               class="px-3 py-2 text-caption rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                前へ
+            </a>
+            {% else %}
+            <span class="px-3 py-2 text-caption rounded-lg border border-gray-100 text-gray-300">
+                前へ
+            </span>
+            {% endif %}
+
+            {% for page in page_range %}
+                {% if page == '…' %}
+                <span class="px-2 text-caption text-gray-400">…</span>
+                {% elif page == page_obj.number %}
+                <span class="px-3 py-2 text-caption rounded-lg bg-pink-500 text-white">
+                    {{ page }}
+                </span>
+                {% else %}
+                <a href="?page={{ page }}{% if query_string %}&{{ query_string }}{% endif %}"
+                   class="px-3 py-2 text-caption rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    {{ page }}
+                </a>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
+               class="px-3 py-2 text-caption rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                次へ
+            </a>
+            {% else %}
+            <span class="px-3 py-2 text-caption rounded-lg border border-gray-100 text-gray-300">
+                次へ
+            </span>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
     {% else %}
     <section class="card text-center py-16">
         <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">

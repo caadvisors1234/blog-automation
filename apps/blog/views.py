@@ -15,6 +15,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.core.paginator import Paginator
 from .models import BlogPost, BlogImage, PostLog, BlogPostTemplate
 from .serializers import (
     BlogPostListSerializer,
@@ -443,9 +444,43 @@ def post_list(request):
             Q(content__icontains=search) |
             Q(keywords__icontains=search)
         )
+
+    paginator = Paginator(posts, 10)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    total_pages = paginator.num_pages
+    current_page = page_obj.number
+    if total_pages <= 7:
+        page_range = list(range(1, total_pages + 1))
+    else:
+        page_range = [1]
+        if current_page <= 3:
+            start, end = 2, 4
+        elif current_page >= total_pages - 2:
+            start, end = total_pages - 3, total_pages - 1
+        else:
+            start, end = current_page - 1, current_page + 1
+
+        if start > 2:
+            page_range.append('…')
+        page_range.extend(range(start, end + 1))
+        if end < total_pages - 1:
+            page_range.append('…')
+        page_range.append(total_pages)
+
+    query_params = request.GET.copy()
+    if 'page' in query_params:
+        del query_params['page']
+    query_string = query_params.urlencode()
     
     context = {
-        'posts': posts,
+        'posts': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'is_paginated': page_obj.has_other_pages(),
+        'page_range': page_range,
+        'query_string': query_string,
         'status_filter': status_filter,
         'search': search,
         'status_group_choices': [
