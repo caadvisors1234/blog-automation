@@ -24,7 +24,7 @@ class GeminiClient:
     def __init__(self):
         """Initialize Gemini client"""
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.model_id = 'gemini-2.5-flash'
+        self.model_id = 'gemini-3-flash-preview'
 
     def _extract_json_from_text(self, text: str) -> Optional[Any]:
         """
