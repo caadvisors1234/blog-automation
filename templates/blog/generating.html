@@ -10,7 +10,7 @@
         <h1 class="text-display text-gray-900 mb-4">AI記事生成中</h1>
         <p class="text-body text-gray-500">3つの記事案を生成しています。少々お待ちください...</p>
     </header>
-    
+
     <!-- Progress Card -->
     <div class="card">
         <div class="flex flex-col items-center py-8">
@@ -24,7 +24,7 @@
                     </svg>
                 </div>
             </div>
-            
+
             <!-- Progress Text -->
             <div id="progress-container" class="w-full max-w-md">
                 <div class="flex justify-between text-caption text-gray-500 mb-2">
@@ -35,7 +35,7 @@
                     <div id="progress-bar" class="h-full bg-pink-500 rounded-full transition-all duration-500" style="width: 0%"></div>
                 </div>
             </div>
-            
+
             <!-- Info -->
             <div class="mt-8 text-center">
                 <p class="text-caption text-gray-400 mb-4">
@@ -45,12 +45,12 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <span>通常30〜1分程度かかります</span>
+                    <span>通常30秒〜60秒程度かかります</span>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Cancel Link -->
     <div class="mt-6 text-center">
         <a href="{% url 'blog:post_list' %}" class="text-caption text-gray-500 hover:text-gray-700 transition-colors">
@@ -71,10 +71,10 @@
         const progressBar = document.getElementById('progress-bar');
         const progressMessage = document.getElementById('progress-message');
         const progressPercent = document.getElementById('progress-percent');
-        
+
         // Connect to WebSocket
         window.blogWS.connect(postId);
-        
+
         // Update progress
         window.blogWS.on('task_progress', (data) => {
             const percent = data.progress || 0;
@@ -84,13 +84,13 @@
                 progressMessage.textContent = data.message;
             }
         });
-        
+
         // Handle completion - redirect to selection page
         window.blogWS.on('task_completed', (data) => {
             progressBar.style.width = '100%';
             progressPercent.textContent = '100%';
             progressMessage.textContent = '生成完了！選択画面に移動します...';
-            
+
             setTimeout(() => {
                 if (data.result && data.result.redirect_url) {
                     window.location.href = data.result.redirect_url;
@@ -99,7 +99,7 @@
                 }
             }, 1000);
         });
-        
+
         // Handle failure
         window.blogWS.on('task_failed', (data) => {
             progressMessage.textContent = 'エラーが発生しました';
@@ -107,12 +107,12 @@
             progressBar.style.width = '0%';
             progressBar.classList.remove('bg-pink-500');
             progressBar.classList.add('bg-red-500');
-            
+
             setTimeout(() => {
                 window.location.href = `/blog/posts/${postId}/`;
             }, 2000);
         });
-        
+
         // Poll for status changes (fallback if WebSocket fails)
         let pollInterval = setInterval(() => {
             fetch(`/api/blog/posts/${postId}/`)
